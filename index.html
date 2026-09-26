@@ -76,10 +76,7 @@
       line-height: 1.8;
     }
 
-    .correct {
-      font-weight: bold;
-    }
-
+    .correct,
     .wrong {
       font-weight: bold;
     }
@@ -191,65 +188,96 @@ let maxMistakes = 2;
 let results = {};
 let sessionActive = false;
 
-  /* -------------------------
-   音声関係
+
+/* -------------------------
+   音声
 ------------------------- */
 
-let audioContext = null;
-let audioBuffers = {};
+const audioFiles = {};
+let audioPrepared = false;
 
 
 /* -------------------------
-   0～9の音声を事前読み込み
+   0～9の音声を事前準備
 ------------------------- */
 
-async function preloadAudio() {
+function preloadAudio() {
 
-  if (!audioContext) {
-
-    audioContext =
-      new (window.AudioContext ||
-           window.webkitAudioContext)();
+  if (audioPrepared) {
+    return Promise.resolve();
   }
 
-  /*
-    iPhone Safari対策。
-    セッション開始ボタンというユーザー操作の中で
-    AudioContextを有効化する。
-  */
-  if (audioContext.state === "suspended") {
-    await audioContext.resume();
-  }
-
-  /*
-    すでに全部読み込み済みなら再取得しない
-  */
-  if (Object.keys(audioBuffers).length === 10) {
-    return;
-  }
-
-  const buffers = {};
+  const promises = [];
 
   for (let digit = 0; digit <= 9; digit++) {
 
-    const response =
-      await fetch("audio/" + digit + ".wav");
+    const audio =
+      new Audio("audio/" + digit + ".wav");
 
-    if (!response.ok) {
-      throw new Error(
-        digit + ".wav の読み込みに失敗しました"
-      );
-    }
+    audio.preload = "auto";
 
-    const arrayBuffer =
-      await response.arrayBuffer();
+    audioFiles[digit] = audio;
 
-    buffers[digit] =
-      await audioContext.decodeAudioData(arrayBuffer);
+    const promise =
+      new Promise((resolve, reject) => {
+
+        const loaded = () => {
+          cleanup();
+          resolve();
+        };
+
+        const failed = () => {
+          cleanup();
+          reject(
+            new Error(
+              digit + ".wav の読み込みに失敗しました"
+            )
+          );
+        };
+
+        const cleanup = () => {
+          audio.removeEventListener(
+            "canplaythrough",
+            loaded
+          );
+
+          audio.removeEventListener(
+            "error",
+            failed
+          );
+        };
+
+        /*
+          すでに再生可能な状態なら待たない
+        */
+        if (audio.readyState >= 4) {
+          resolve();
+          return;
+        }
+
+        audio.addEventListener(
+          "canplaythrough",
+          loaded
+        );
+
+        audio.addEventListener(
+          "error",
+          failed
+        );
+
+        audio.load();
+      });
+
+    promises.push(promise);
   }
 
-  audioBuffers = buffers;
+  return Promise
+    .all(promises)
+    .then(() => {
+      audioPrepared = true;
+    });
 }
+
 
 /* -------------------------
    数列生成
@@ -260,6 +288,7 @@ function generateNumbers(length) {
   const numbers = [];
 
   for (let i = 0; i < length; i++) {
+
     numbers.push(
       Math.floor(Math.random() * 10)
     );
@@ -274,6 +303,7 @@ function generateNumbers(length) {
 ------------------------- */
 
 function sleep(ms) {
+
   return new Promise(resolve =>
     setTimeout(resolve, ms)
   );
@@ -286,31 +316,28 @@ function sleep(ms) {
 
 async function playNumbers(numbers, interval) {
 
-  if (!audioContext) {
-    throw new Error("音声が準備されていません");
-  }
-
-  if (audioContext.state === "suspended") {
-    await audioContext.resume();
-  }
-
   for (let i = 0; i < numbers.length; i++) {
 
-    const source =
-      audioContext.createBufferSource();
+    const audio =
+      audioFiles[numbers[i]];
 
-    source.buffer =
-      audioBuffers[numbers[i]];
-
-    source.connect(
-      audioContext.destination
-    );
-
-    source.start();
+    if (!audio) {
+      throw new Error(
+        "音声が準備されていません"
+      );
+    }
 
     /*
-      次の数字を読み始めるまでの間隔。
-      WAVの長さとは独立して一定にする。
+      同じ数字が連続しても
+      必ず先頭から再生する
+    */
+    audio.pause();
+    audio.currentTime = 0;
+
+    await audio.play();
+
+    /*
+      次の数字を読み始めるまでの間隔
     */
     await sleep(interval);
   }
@@ -327,30 +354,63 @@ async function startQuestion() {
     return;
   }
 
-  document.getElementById("answerArea").style.display = "none";
-  document.getElementById("nextArea").style.display = "none";
-  document.getElementById("result").innerHTML = "";
+  document
+    .getElementById("answerArea")
+    .style.display = "none";
 
-  document.getElementById("status").textContent =
-    currentDigits + "桁　読み上げ中...";
+  document
+    .getElementById("nextArea")
+    .style.display = "none";
+
+  document
+    .getElementById("result")
+    .innerHTML = "";
+
+  document
+    .getElementById("status")
+    .textContent =
+      currentDigits + "桁　読み上げ中...";
 
   currentNumbers =
     generateNumbers(currentDigits);
 
-  await playNumbers(
-    currentNumbers,
-    intervalMs
-  );
+  try {
 
-  document.getElementById("status").textContent =
-    currentDigits + "桁　回答してください";
+    await playNumbers(
+      currentNumbers,
+      intervalMs
+    );
 
-  document.getElementById("answer").value = "";
+  } catch (error) {
 
-  document.getElementById("answerArea").style.display =
-    "block";
+    console.error(error);
 
-  document.getElementById("answer").focus();
+    sessionActive = false;
+
+    document
+      .getElementById("status")
+      .textContent =
+        "音声の再生に失敗しました。";
+
+    return;
+  }
+
+  document
+    .getElementById("status")
+    .textContent =
+      currentDigits + "桁　回答してください";
+
+  document
+    .getElementById("answer")
+    .value = "";
+
+  document
+    .getElementById("answerArea")
+    .style.display = "block";
+
+  document
+    .getElementById("answer")
+    .focus();
 }
 
 
@@ -363,43 +423,66 @@ document
   .addEventListener("click", async () => {
 
     const startButton =
-      document.getElementById("startSessionButton");
+      document.getElementById(
+        "startSessionButton"
+      );
 
     startButton.disabled = true;
-    startButton.textContent = "音声を準備中...";
+    startButton.textContent =
+      "音声を準備中...";
+
+    document
+      .getElementById("status")
+      .textContent = "";
 
     try {
 
       /*
-        ここで0～9.wavを全部読み込む。
-        完了するまで問題は開始しない。
+        0～9を最初に読み込む
       */
       await preloadAudio();
 
       currentDigits =
-        Number(document.getElementById("digits").value);
+        Number(
+          document
+            .getElementById("digits")
+            .value
+        );
 
       intervalMs =
-        Number(document.getElementById("interval").value);
+        Number(
+          document
+            .getElementById("interval")
+            .value
+        );
 
       answerMode =
-        document.getElementById("mode").value;
+        document
+          .getElementById("mode")
+          .value;
 
       progressMode =
-        document.getElementById("progressMode").value;
+        document
+          .getElementById("progressMode")
+          .value;
 
       maxMistakes =
-        Number(document.getElementById("maxMistakes").value);
+        Number(
+          document
+            .getElementById("maxMistakes")
+            .value
+        );
 
       results = {};
-
       sessionActive = true;
 
-      document.getElementById("settings").style.display =
-        "none";
+      document
+        .getElementById("settings")
+        .style.display = "none";
 
-      document.getElementById("sessionResult").style.display =
-        "none";
+      document
+        .getElementById("sessionResult")
+        .style.display = "none";
 
       await startQuestion();
 
@@ -407,22 +490,27 @@ document
 
       console.error(error);
 
-      document.getElementById("status").textContent =
-        "音声の読み込みに失敗しました。通信状態を確認して、もう一度開始してください。";
+      document
+        .getElementById("status")
+        .textContent =
+          "音声の読み込みに失敗しました。" +
+          "通信状態を確認して、" +
+          "もう一度開始してください。";
 
     } finally {
 
       startButton.disabled = false;
-      startButton.textContent = "セッション開始";
+
+      startButton.textContent =
+        "セッション開始";
     }
   });
 
-   
 
 /* -------------------------
    回答判定
 ------------------------- */
-https://github.com/4Development-CAT/digit-span/blob/main/index.html
+
 document
   .getElementById("checkButton")
   .addEventListener("click", () => {
@@ -432,12 +520,11 @@ document
     }
 
     const answer =
-      document.getElementById("answer").value.trim();
+      document
+        .getElementById("answer")
+        .value
+        .trim();
 
-    /*
-      空欄で回答ボタンを押してしまった場合は
-      不正解として扱わず、そのまま入力を続ける
-    */
     if (answer === "") {
       return;
     }
@@ -452,9 +539,6 @@ document
     const correct =
       correctNumbers.join("");
 
-    /*
-      その桁の成績を初期化
-    */
     if (!results[currentDigits]) {
 
       results[currentDigits] = {
@@ -473,33 +557,40 @@ document
 
       results[currentDigits].success++;
 
-      document.getElementById("result").innerHTML =
-        '<span class="correct">○ 正解</span>' +
-        "<br>正答：" + correct;
+      document
+        .getElementById("result")
+        .innerHTML =
+          '<span class="correct">' +
+          "○ 正解</span>" +
+          "<br>正答：" +
+          correct;
 
     } else {
 
       results[currentDigits].mistakes++;
 
-      document.getElementById("result").innerHTML =
-        '<span class="wrong">× 不正解</span>' +
-        "<br>あなたの回答：" + answer +
-        "<br>正答：" + correct;
+      document
+        .getElementById("result")
+        .innerHTML =
+          '<span class="wrong">' +
+          "× 不正解</span>" +
+          "<br>あなたの回答：" +
+          answer +
+          "<br>正答：" +
+          correct;
     }
 
-    document.getElementById("answerArea").style.display =
-      "none";
+    document
+      .getElementById("answerArea")
+      .style.display = "none";
 
 
     /*
-      自動桁上げモード
+      自動桁上げ
     */
 
     if (progressMode === "auto") {
 
-      /*
-        正解したら次の桁へ
-      */
       if (isCorrect) {
 
         if (currentDigits >= 15) {
@@ -510,17 +601,16 @@ document
 
         currentDigits++;
 
-        document.getElementById("nextArea").style.display =
-          "block";
+        document
+          .getElementById("nextArea")
+          .style.display = "block";
 
         return;
       }
 
-      /*
-        設定回数だけ間違えたら終了
-      */
       if (
-        results[currentDigits].mistakes >= maxMistakes
+        results[currentDigits].mistakes >=
+        maxMistakes
       ) {
 
         endSession();
@@ -528,14 +618,9 @@ document
       }
     }
 
-
-    /*
-      固定モード
-      または自動モードでまだ終了していない場合
-    */
-
-    document.getElementById("nextArea").style.display =
-      "block";
+    document
+      .getElementById("nextArea")
+      .style.display = "block";
   });
 
 
@@ -548,7 +633,6 @@ document
   .addEventListener("click", async () => {
 
     await startQuestion();
-
   });
 
 
@@ -561,7 +645,6 @@ document
   .addEventListener("click", () => {
 
     endSession();
-
   });
 
 
@@ -573,14 +656,18 @@ function endSession() {
 
   sessionActive = false;
 
-  document.getElementById("answerArea").style.display =
-    "none";
+  document
+    .getElementById("answerArea")
+    .style.display = "none";
 
-  document.getElementById("nextArea").style.display =
-    "none";
+  document
+    .getElementById("nextArea")
+    .style.display = "none";
 
-  document.getElementById("status").textContent =
-    "セッション終了";
+  document
+    .getElementById("status")
+    .textContent =
+      "セッション終了";
 
   showSessionResult();
 }
@@ -593,12 +680,16 @@ function endSession() {
 function showSessionResult() {
 
   const resultArea =
-    document.getElementById("sessionResult");
+    document.getElementById(
+      "sessionResult"
+    );
 
-  let html = "<strong>【結果】</strong><br><br>";
+  let html =
+    "<strong>【結果】</strong><br><br>";
 
   const digitList =
-    Object.keys(results)
+    Object
+      .keys(results)
       .map(Number)
       .sort((a, b) => a - b);
 
@@ -617,9 +708,6 @@ function showSessionResult() {
       data.attempts +
       "<br>";
 
-    /*
-      1回以上成功した最大桁
-    */
     if (data.success > 0) {
 
       if (
@@ -648,7 +736,8 @@ function showSessionResult() {
   }
 
   html +=
-    '<br><br><button onclick="resetSession()">' +
+    '<br><br>' +
+    '<button onclick="resetSession()">' +
     "設定画面へ戻る" +
     "</button>";
 
@@ -663,17 +752,21 @@ function showSessionResult() {
 
 function resetSession() {
 
-  document.getElementById("settings").style.display =
-    "block";
+  document
+    .getElementById("settings")
+    .style.display = "block";
 
-  document.getElementById("status").textContent =
-    "";
+  document
+    .getElementById("status")
+    .textContent = "";
 
-  document.getElementById("result").innerHTML =
-    "";
+  document
+    .getElementById("result")
+    .innerHTML = "";
 
-  document.getElementById("sessionResult").style.display =
-    "none";
+  document
+    .getElementById("sessionResult")
+    .style.display = "none";
 }
 
 
