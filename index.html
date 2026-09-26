@@ -417,36 +417,12 @@ document
     }
   });
 
-    intervalMs =
-      Number(document.getElementById("interval").value);
-
-    answerMode =
-      document.getElementById("mode").value;
-
-    progressMode =
-      document.getElementById("progressMode").value;
-
-    maxMistakes =
-      Number(document.getElementById("maxMistakes").value);
-
-    results = {};
-
-    sessionActive = true;
-
-    document.getElementById("settings").style.display =
-      "none";
-
-    document.getElementById("sessionResult").style.display =
-      "none";
-
-    await startQuestion();
-  });
-
+   
 
 /* -------------------------
    回答判定
 ------------------------- */
-
+https://github.com/4Development-CAT/digit-span/blob/main/index.html
 document
   .getElementById("checkButton")
   .addEventListener("click", () => {
