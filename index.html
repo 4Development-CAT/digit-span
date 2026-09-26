@@ -36,8 +36,15 @@
       border: 1px solid #888;
       border-radius: 6px;
       font-size: 26px;
-      letter-spacing: 2px;
       overflow-wrap: anywhere;
+    }
+    .answerToken {
+      width: auto;
+      min-width: 42px;
+      min-height: 42px;
+      margin: 3px;
+      padding: 5px 8px;
+      font-size: 24px;
     }
     .keyTitle {
       margin-top: 18px;
@@ -291,6 +298,19 @@ function generateLetterNumber(length) {
   const digitPool = shuffle([1,2,3,4,5,6,7,8,9]).slice(0, digitCount);
   const kanaPool = shuffle(kanaList).slice(0, kanaCount);
 
+  // 「2（に）」と「ニ」は音だけでは紛らわしいため、
+  // 同一問題には共存させない。9は音声が「きゅう」なのでクとの共存可。
+  if (digitPool.includes(2)) {
+    const niIndex = kanaPool.findIndex(kana => kana.char === "ニ");
+    if (niIndex !== -1) {
+      const usedKana = new Set(kanaPool.map(kana => kana.char));
+      const replacement = shuffle(
+        kanaList.filter(kana => kana.char !== "ニ" && !usedKana.has(kana.char))
+      )[0];
+      kanaPool[niIndex] = replacement;
+    }
+  }
+
   const items = [
     ...digitPool.map(value => ({
       type:"digit", value:String(value), audioKey:"d" + value
@@ -351,8 +371,21 @@ function clearAnswer() {
 }
 
 function updateSequenceAnswer() {
-  document.getElementById("sequenceAnswer").textContent =
-    sequenceAnswerItems.join("");
+  const area = document.getElementById("sequenceAnswer");
+  area.innerHTML = "";
+
+  sequenceAnswerItems.forEach((value, index) => {
+    const token = document.createElement("button");
+    token.type = "button";
+    token.className = "answerToken";
+    token.textContent = value;
+    token.title = "タップして削除";
+    token.addEventListener("click", () => {
+      sequenceAnswerItems.splice(index, 1);
+      updateSequenceAnswer();
+    });
+    area.appendChild(token);
+  });
 }
 
 function buildAnswerKeys() {
