@@ -191,6 +191,65 @@ let maxMistakes = 2;
 let results = {};
 let sessionActive = false;
 
+  /* -------------------------
+   音声関係
+------------------------- */
+
+let audioContext = null;
+let audioBuffers = {};
+
+
+/* -------------------------
+   0～9の音声を事前読み込み
+------------------------- */
+
+async function preloadAudio() {
+
+  if (!audioContext) {
+
+    audioContext =
+      new (window.AudioContext ||
+           window.webkitAudioContext)();
+  }
+
+  /*
+    iPhone Safari対策。
+    セッション開始ボタンというユーザー操作の中で
+    AudioContextを有効化する。
+  */
+  if (audioContext.state === "suspended") {
+    await audioContext.resume();
+  }
+
+  /*
+    すでに全部読み込み済みなら再取得しない
+  */
+  if (Object.keys(audioBuffers).length === 10) {
+    return;
+  }
+
+  const buffers = {};
+
+  for (let digit = 0; digit <= 9; digit++) {
+
+    const response =
+      await fetch("audio/" + digit + ".wav");
+
+    if (!response.ok) {
+      throw new Error(
+        digit + ".wav の読み込みに失敗しました"
+      );
+    }
+
+    const arrayBuffer =
+      await response.arrayBuffer();
+
+    buffers[digit] =
+      await audioContext.decodeAudioData(arrayBuffer);
+  }
+
+  audioBuffers = buffers;
+}
 
 /* -------------------------
    数列生成
@@ -227,13 +286,32 @@ function sleep(ms) {
 
 async function playNumbers(numbers, interval) {
 
+  if (!audioContext) {
+    throw new Error("音声が準備されていません");
+  }
+
+  if (audioContext.state === "suspended") {
+    await audioContext.resume();
+  }
+
   for (let i = 0; i < numbers.length; i++) {
 
-    const audio =
-      new Audio("audio/" + numbers[i] + ".wav");
+    const source =
+      audioContext.createBufferSource();
 
-    await audio.play();
+    source.buffer =
+      audioBuffers[numbers[i]];
 
+    source.connect(
+      audioContext.destination
+    );
+
+    source.start();
+
+    /*
+      次の数字を読み始めるまでの間隔。
+      WAVの長さとは独立して一定にする。
+    */
     await sleep(interval);
   }
 }
@@ -284,8 +362,60 @@ document
   .getElementById("startSessionButton")
   .addEventListener("click", async () => {
 
-    currentDigits =
-      Number(document.getElementById("digits").value);
+    const startButton =
+      document.getElementById("startSessionButton");
+
+    startButton.disabled = true;
+    startButton.textContent = "音声を準備中...";
+
+    try {
+
+      /*
+        ここで0～9.wavを全部読み込む。
+        完了するまで問題は開始しない。
+      */
+      await preloadAudio();
+
+      currentDigits =
+        Number(document.getElementById("digits").value);
+
+      intervalMs =
+        Number(document.getElementById("interval").value);
+
+      answerMode =
+        document.getElementById("mode").value;
+
+      progressMode =
+        document.getElementById("progressMode").value;
+
+      maxMistakes =
+        Number(document.getElementById("maxMistakes").value);
+
+      results = {};
+
+      sessionActive = true;
+
+      document.getElementById("settings").style.display =
+        "none";
+
+      document.getElementById("sessionResult").style.display =
+        "none";
+
+      await startQuestion();
+
+    } catch (error) {
+
+      console.error(error);
+
+      document.getElementById("status").textContent =
+        "音声の読み込みに失敗しました。通信状態を確認して、もう一度開始してください。";
+
+    } finally {
+
+      startButton.disabled = false;
+      startButton.textContent = "セッション開始";
+    }
+  });
 
     intervalMs =
       Number(document.getElementById("interval").value);
