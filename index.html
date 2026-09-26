@@ -3,116 +3,90 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>数唱トレーニング</title>
-
+  <title>WMIトレーニング</title>
   <style>
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue",
-                   Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
       max-width: 500px;
       margin: 30px auto;
       padding: 20px;
     }
-
-    h1 {
-      font-size: 24px;
-    }
-
-    .setting {
-      margin: 18px 0;
-    }
-
-    label {
-      display: block;
-      margin-bottom: 6px;
-      font-weight: bold;
-    }
-
-    select, button, input {
-      box-sizing: border-box;
-      font-size: 20px;
-      padding: 10px;
-    }
-
-    select {
-      min-width: 150px;
-    }
-
-    button {
-      width: 100%;
-      margin-top: 15px;
-      min-height: 50px;
-    }
-
-    #answerArea,
-    #nextArea,
-    #sessionResult {
-      display: none;
-      margin-top: 25px;
-    }
-
-    #answer {
-      width: 100%;
-      font-size: 28px;
-      letter-spacing: 3px;
-    }
-
-    #status {
-      margin: 25px 0 10px;
-      font-size: 20px;
-      font-weight: bold;
-    }
-
-    #result {
-      margin-top: 20px;
-      font-size: 20px;
-      line-height: 1.7;
-    }
-
+    h1 { font-size: 24px; }
+    .setting { margin: 18px 0; }
+    label { display: block; margin-bottom: 6px; font-weight: bold; }
+    select, button, input { box-sizing: border-box; font-size: 20px; padding: 10px; }
+    select { min-width: 150px; }
+    button { width: 100%; margin-top: 15px; min-height: 50px; }
+    #answerArea, #nextArea, #sessionResult { display: none; margin-top: 25px; }
+    #answer { width: 100%; font-size: 28px; letter-spacing: 3px; }
+    #status { margin: 25px 0 10px; font-size: 20px; font-weight: bold; }
+    #result { margin-top: 20px; font-size: 20px; line-height: 1.7; }
     #sessionResult {
       border-top: 1px solid #aaa;
       padding-top: 20px;
       font-size: 20px;
       line-height: 1.8;
     }
+    .correct, .wrong { font-weight: bold; }
 
-    .correct,
-    .wrong {
-      font-weight: bold;
+    #sequenceAnswerArea { display: none; }
+    #sequenceAnswer {
+      min-height: 48px;
+      padding: 10px;
+      border: 1px solid #888;
+      border-radius: 6px;
+      font-size: 26px;
+      letter-spacing: 2px;
+      overflow-wrap: anywhere;
     }
+    .keyTitle {
+      margin-top: 18px;
+      margin-bottom: 6px;
+      font-weight: bold;
+      font-size: 18px;
+    }
+    .keyGrid {
+      display: grid;
+      gap: 6px;
+    }
+    #numberKeys { grid-template-columns: repeat(5, 1fr); }
+    #kanaKeys { grid-template-columns: repeat(5, 1fr); }
+    .keyButton {
+      margin: 0;
+      min-height: 44px;
+      padding: 6px 2px;
+      font-size: 19px;
+    }
+    #deleteSequenceButton { margin-top: 12px; }
   </style>
 </head>
-
 <body>
 
-<h1>数唱トレーニング</h1>
+<h1>WMIトレーニング</h1>
 
 <div id="settings">
-
   <div class="setting">
-    <label for="progressMode">桁数モード</label>
-    <select id="progressMode">
-      <option value="fixed">桁固定</option>
-      <option value="auto">自動桁上げ</option>
+    <label for="trainingType">トレーニング</label>
+    <select id="trainingType">
+      <option value="digitSpan">数唱</option>
+      <option value="letterNumber">語音整列</option>
     </select>
   </div>
 
   <div class="setting">
-    <label for="digits">開始桁数</label>
+    <label for="progressMode">項目数モード</label>
+    <select id="progressMode">
+      <option value="fixed">固定</option>
+      <option value="auto">自動項目数上げ</option>
+    </select>
+  </div>
+
+  <div class="setting">
+    <label for="digits">開始項目数</label>
     <select id="digits">
-      <option>3</option>
-      <option>4</option>
-      <option>5</option>
-      <option>6</option>
-      <option selected>7</option>
-      <option>8</option>
-      <option>9</option>
-      <option>10</option>
-      <option>11</option>
-      <option>12</option>
-      <option>13</option>
-      <option>14</option>
-      <option>15</option>
+      <option>3</option><option>4</option><option>5</option><option>6</option>
+      <option selected>7</option><option>8</option><option>9</option><option>10</option>
+      <option>11</option><option>12</option><option>13</option><option>14</option><option>15</option>
     </select>
   </div>
 
@@ -127,7 +101,7 @@
     </select>
   </div>
 
-  <div class="setting">
+  <div class="setting" id="digitModeSetting">
     <label for="mode">回答モード</label>
     <select id="mode">
       <option value="forward">順唱</option>
@@ -136,7 +110,7 @@
   </div>
 
   <div class="setting">
-    <label for="maxMistakes">各桁の不正解終了回数</label>
+    <label for="maxMistakes">各項目数の不正解終了回数</label>
     <select id="maxMistakes">
       <option value="1">1回</option>
       <option value="2" selected>2回</option>
@@ -147,21 +121,28 @@
   </div>
 
   <button id="startSessionButton">セッション開始</button>
-
 </div>
 
 <div id="status"></div>
 
 <div id="answerArea">
-  <label for="answer">回答</label>
+  <div id="digitAnswerArea">
+    <label for="answer">回答</label>
+    <input id="answer" type="tel" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+  </div>
 
-  <input
-    id="answer"
-    type="tel"
-    inputmode="numeric"
-    pattern="[0-9]*"
-    autocomplete="off"
-  >
+  <div id="sequenceAnswerArea">
+    <label>回答</label>
+    <div id="sequenceAnswer"></div>
+
+    <div class="keyTitle">数字</div>
+    <div id="numberKeys" class="keyGrid"></div>
+
+    <div class="keyTitle">カナ</div>
+    <div id="kanaKeys" class="keyGrid"></div>
+
+    <button id="deleteSequenceButton" type="button">1文字削除</button>
+  </div>
 
   <button id="checkButton">回答する</button>
 </div>
@@ -176,618 +157,437 @@
 <div id="sessionResult"></div>
 
 <script>
-
-let currentNumbers = [];
-let currentDigits = 7;
-
+let trainingType = "digitSpan";
+let currentItems = [];
+let currentCount = 7;
 let intervalMs = 1000;
 let answerMode = "forward";
 let progressMode = "fixed";
 let maxMistakes = 2;
-
 let results = {};
 let sessionActive = false;
-
-
-/* -------------------------
-   音声
-------------------------- */
+let sequenceAnswerItems = [];
 
 const audioFiles = {};
-let audioPrepared = false;
+const preparedAudioKeys = new Set();
 
+const kanaList = [
+  { char:"ア", file:"a.wav" },   { char:"イ", file:"i.wav" },
+  { char:"ウ", file:"u.wav" },   { char:"エ", file:"e.wav" },
+  { char:"オ", file:"o.wav" },
+  { char:"カ", file:"ka.wav" },  { char:"キ", file:"ki.wav" },
+  { char:"ク", file:"ku.wav" },  { char:"ケ", file:"ke.wav" },
+  { char:"コ", file:"ko.wav" },
+  { char:"サ", file:"sa.wav" },  { char:"シ", file:"shi.wav" },
+  { char:"ス", file:"su.wav" },  { char:"セ", file:"se.wav" },
+  { char:"ソ", file:"so.wav" },
+  { char:"タ", file:"ta.wav" },  { char:"チ", file:"chi.wav" },
+  { char:"ツ", file:"tsu.wav" }, { char:"テ", file:"te.wav" },
+  { char:"ト", file:"to.wav" },
+  { char:"ナ", file:"na.wav" },  { char:"ニ", file:"ni.wav" },
+  { char:"ヌ", file:"nu.wav" },  { char:"ネ", file:"ne.wav" },
+  { char:"ノ", file:"no.wav" },
+  { char:"ハ", file:"ha.wav" },  { char:"ヒ", file:"hi.wav" },
+  { char:"フ", file:"fu.wav" },  { char:"ヘ", file:"he.wav" },
+  { char:"ホ", file:"ho.wav" },
+  { char:"マ", file:"ma.wav" },  { char:"ミ", file:"mi.wav" },
+  { char:"ム", file:"mu.wav" },  { char:"メ", file:"me.wav" },
+  { char:"モ", file:"mo.wav" },
+  { char:"ヤ", file:"ya.wav" },  { char:"ユ", file:"yu.wav" },
+  { char:"ヨ", file:"yo.wav" },
+  { char:"ラ", file:"ra.wav" },  { char:"リ", file:"ri.wav" },
+  { char:"ル", file:"ru.wav" },  { char:"レ", file:"re.wav" },
+  { char:"ロ", file:"ro.wav" },
+  { char:"ワ", file:"wa.wav" }
+];
 
-/* -------------------------
-   0～9の音声を事前準備
-------------------------- */
-
-function preloadAudio() {
-
-  if (audioPrepared) {
-    return Promise.resolve();
-  }
-
-  const promises = [];
-
-  for (let digit = 0; digit <= 9; digit++) {
-
-    const audio =
-      new Audio("audio/" + digit + ".wav");
-
-    audio.preload = "auto";
-
-    audioFiles[digit] = audio;
-
-    const promise =
-      new Promise((resolve, reject) => {
-
-        const loaded = () => {
-          cleanup();
-          resolve();
-        };
-
-        const failed = () => {
-          cleanup();
-          reject(
-            new Error(
-              digit + ".wav の読み込みに失敗しました"
-            )
-          );
-        };
-
-        const cleanup = () => {
-          audio.removeEventListener(
-            "canplaythrough",
-            loaded
-          );
-
-          audio.removeEventListener(
-            "error",
-            failed
-          );
-        };
-
-        /*
-          すでに再生可能な状態なら待たない
-        */
-        if (audio.readyState >= 4) {
-          resolve();
-          return;
-        }
-
-        audio.addEventListener(
-          "canplaythrough",
-          loaded
-        );
-
-        audio.addEventListener(
-          "error",
-          failed
-        );
-
-        audio.load();
-      });
-
-    promises.push(promise);
-  }
-
-  return Promise
-    .all(promises)
-    .then(() => {
-      audioPrepared = true;
-    });
-}
-
-
-/* -------------------------
-   数列生成
-------------------------- */
-
-function generateNumbers(length) {
-
-  const numbers = [];
-
-  for (let i = 0; i < length; i++) {
-
-    numbers.push(
-      Math.floor(Math.random() * 10)
-    );
-  }
-
-  return numbers;
-}
-
-
-/* -------------------------
-   待機
-------------------------- */
+const kanaOrder = new Map(kanaList.map((item, index) => [item.char, index]));
+const kanaByChar = new Map(kanaList.map(item => [item.char, item]));
 
 function sleep(ms) {
-
-  return new Promise(resolve =>
-    setTimeout(resolve, ms)
-  );
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function shuffle(array) {
+  const copy = [...array];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
 
-/* -------------------------
-   音声再生
-------------------------- */
+function loadAudio(key, fileName) {
+  if (preparedAudioKeys.has(key)) return Promise.resolve();
 
-async function playNumbers(numbers, interval) {
+  const audio = new Audio("audio/" + fileName);
+  audio.preload = "auto";
+  audioFiles[key] = audio;
 
-  for (let i = 0; i < numbers.length; i++) {
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      audio.removeEventListener("canplaythrough", loaded);
+      audio.removeEventListener("error", failed);
+    };
+    const loaded = () => {
+      cleanup();
+      preparedAudioKeys.add(key);
+      resolve();
+    };
+    const failed = () => {
+      cleanup();
+      reject(new Error(fileName + " の読み込みに失敗しました"));
+    };
 
-    const audio =
-      audioFiles[numbers[i]];
-
-    if (!audio) {
-      throw new Error(
-        "音声が準備されていません"
-      );
+    if (audio.readyState >= 4) {
+      preparedAudioKeys.add(key);
+      resolve();
+      return;
     }
 
-    /*
-      同じ数字が連続しても
-      必ず先頭から再生する
-    */
+    audio.addEventListener("canplaythrough", loaded);
+    audio.addEventListener("error", failed);
+    audio.load();
+  });
+}
+
+async function preloadAudioForSession() {
+  const promises = [];
+
+  if (trainingType === "digitSpan") {
+    for (let digit = 0; digit <= 9; digit++) {
+      promises.push(loadAudio("d" + digit, digit + ".wav"));
+    }
+  } else {
+    for (let digit = 1; digit <= 9; digit++) {
+      promises.push(loadAudio("d" + digit, digit + ".wav"));
+    }
+    for (const kana of kanaList) {
+      promises.push(loadAudio("k" + kana.char, kana.file));
+    }
+  }
+
+  await Promise.all(promises);
+}
+
+function generateDigitSpan(length) {
+  const items = [];
+  for (let i = 0; i < length; i++) {
+    const value = Math.floor(Math.random() * 10);
+    items.push({ type:"digit", value:String(value), audioKey:"d" + value });
+  }
+  return items;
+}
+
+function generateLetterNumber(length) {
+  // 数字とカナを最低1つずつ含める。
+  // 同一問題内では同じ数字・同じカナを重複させない。
+  const maxDigits = Math.min(9, length - 1);
+  const minDigits = Math.max(1, length - kanaList.length);
+  const digitCount =
+    minDigits + Math.floor(Math.random() * (maxDigits - minDigits + 1));
+  const kanaCount = length - digitCount;
+
+  const digitPool = shuffle([1,2,3,4,5,6,7,8,9]).slice(0, digitCount);
+  const kanaPool = shuffle(kanaList).slice(0, kanaCount);
+
+  const items = [
+    ...digitPool.map(value => ({
+      type:"digit", value:String(value), audioKey:"d" + value
+    })),
+    ...kanaPool.map(kana => ({
+      type:"kana", value:kana.char, audioKey:"k" + kana.char
+    }))
+  ];
+
+  return shuffle(items);
+}
+
+async function playItems(items, interval) {
+  for (const item of items) {
+    const audio = audioFiles[item.audioKey];
+    if (!audio) throw new Error("音声が準備されていません: " + item.value);
+
     audio.pause();
     audio.currentTime = 0;
-
     await audio.play();
-
-    /*
-      次の数字を読み始めるまでの間隔
-    */
     await sleep(interval);
   }
 }
 
-
-/* -------------------------
-   問題開始
-------------------------- */
-
-async function startQuestion() {
-
-  if (!sessionActive) {
-    return;
+function getCorrectAnswer() {
+  if (trainingType === "digitSpan") {
+    let values = currentItems.map(item => item.value);
+    if (answerMode === "backward") values = [...values].reverse();
+    return values.join("");
   }
 
-  document
-    .getElementById("answerArea")
-    .style.display = "none";
+  const digits = currentItems
+    .filter(item => item.type === "digit")
+    .map(item => Number(item.value))
+    .sort((a, b) => a - b)
+    .join("");
 
-  document
-    .getElementById("nextArea")
-    .style.display = "none";
+  const kana = currentItems
+    .filter(item => item.type === "kana")
+    .map(item => item.value)
+    .sort((a, b) => kanaOrder.get(a) - kanaOrder.get(b))
+    .join("");
 
-  document
-    .getElementById("result")
-    .innerHTML = "";
-
-  document
-    .getElementById("status")
-    .textContent =
-      currentDigits + "桁　読み上げ中...";
-
-  currentNumbers =
-    generateNumbers(currentDigits);
-
-  try {
-
-    await playNumbers(
-      currentNumbers,
-      intervalMs
-    );
-
-  } catch (error) {
-
-    console.error(error);
-
-    sessionActive = false;
-
-    document
-      .getElementById("status")
-      .textContent =
-        "音声の再生に失敗しました。";
-
-    return;
-  }
-
-  document
-    .getElementById("status")
-    .textContent =
-      currentDigits + "桁　回答してください";
-
-  document
-    .getElementById("answer")
-    .value = "";
-
-  document
-    .getElementById("answerArea")
-    .style.display = "block";
-
-  document
-    .getElementById("answer")
-    .focus();
+  return digits + kana;
 }
 
+function getUserAnswer() {
+  if (trainingType === "digitSpan") {
+    return document.getElementById("answer").value.trim();
+  }
+  return sequenceAnswerItems.join("");
+}
 
-/* -------------------------
-   セッション開始
-------------------------- */
+function clearAnswer() {
+  document.getElementById("answer").value = "";
+  sequenceAnswerItems = [];
+  updateSequenceAnswer();
+}
 
-document
-  .getElementById("startSessionButton")
-  .addEventListener("click", async () => {
+function updateSequenceAnswer() {
+  document.getElementById("sequenceAnswer").textContent =
+    sequenceAnswerItems.join("");
+}
 
-    const startButton =
-      document.getElementById(
-        "startSessionButton"
-      );
+function buildAnswerKeys() {
+  const numberKeys = document.getElementById("numberKeys");
+  const kanaKeys = document.getElementById("kanaKeys");
+  numberKeys.innerHTML = "";
+  kanaKeys.innerHTML = "";
 
-    startButton.disabled = true;
-    startButton.textContent =
-      "音声を準備中...";
+  for (let digit = 1; digit <= 9; digit++) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "keyButton";
+    button.textContent = digit;
+    button.addEventListener("click", () => {
+      sequenceAnswerItems.push(String(digit));
+      updateSequenceAnswer();
+    });
+    numberKeys.appendChild(button);
+  }
 
-    document
-      .getElementById("status")
-      .textContent = "";
+  for (const kana of kanaList) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "keyButton";
+    button.textContent = kana.char;
+    button.addEventListener("click", () => {
+      sequenceAnswerItems.push(kana.char);
+      updateSequenceAnswer();
+    });
+    kanaKeys.appendChild(button);
+  }
+}
 
-    try {
+function updateSettingsForTrainingType() {
+  const type = document.getElementById("trainingType").value;
+  document.getElementById("digitModeSetting").style.display =
+    type === "digitSpan" ? "block" : "none";
+}
 
-      /*
-        0～9を最初に読み込む
-      */
-      await preloadAudio();
+async function startQuestion() {
+  if (!sessionActive) return;
 
-      currentDigits =
-        Number(
-          document
-            .getElementById("digits")
-            .value
-        );
+  document.getElementById("answerArea").style.display = "none";
+  document.getElementById("nextArea").style.display = "none";
+  document.getElementById("result").innerHTML = "";
 
-      intervalMs =
-        Number(
-          document
-            .getElementById("interval")
-            .value
-        );
+  const unit = trainingType === "digitSpan" ? "桁" : "項目";
+  document.getElementById("status").textContent =
+    currentCount + unit + "　読み上げ中...";
 
-      answerMode =
-        document
-          .getElementById("mode")
-          .value;
+  currentItems =
+    trainingType === "digitSpan"
+      ? generateDigitSpan(currentCount)
+      : generateLetterNumber(currentCount);
 
-      progressMode =
-        document
-          .getElementById("progressMode")
-          .value;
+  try {
+    await playItems(currentItems, intervalMs);
+  } catch (error) {
+    console.error(error);
+    sessionActive = false;
+    document.getElementById("status").textContent = "音声の再生に失敗しました。";
+    return;
+  }
 
-      maxMistakes =
-        Number(
-          document
-            .getElementById("maxMistakes")
-            .value
-        );
+  document.getElementById("status").textContent =
+    currentCount + unit + "　回答してください";
 
-      results = {};
-      sessionActive = true;
+  clearAnswer();
 
-      document
-        .getElementById("settings")
-        .style.display = "none";
+  if (trainingType === "digitSpan") {
+    document.getElementById("digitAnswerArea").style.display = "block";
+    document.getElementById("sequenceAnswerArea").style.display = "none";
+  } else {
+    document.getElementById("digitAnswerArea").style.display = "none";
+    document.getElementById("sequenceAnswerArea").style.display = "block";
+  }
 
-      document
-        .getElementById("sessionResult")
-        .style.display = "none";
+  document.getElementById("answerArea").style.display = "block";
 
-      await startQuestion();
+  if (trainingType === "digitSpan") {
+    document.getElementById("answer").focus();
+  }
+}
 
-    } catch (error) {
+document.getElementById("trainingType").addEventListener(
+  "change", updateSettingsForTrainingType
+);
 
-      console.error(error);
+document.getElementById("deleteSequenceButton").addEventListener("click", () => {
+  sequenceAnswerItems.pop();
+  updateSequenceAnswer();
+});
 
-      document
-        .getElementById("status")
-        .textContent =
-          "音声の読み込みに失敗しました。" +
-          "通信状態を確認して、" +
-          "もう一度開始してください。";
+document.getElementById("startSessionButton").addEventListener("click", async () => {
+  const startButton = document.getElementById("startSessionButton");
+  startButton.disabled = true;
+  startButton.textContent = "音声を準備中...";
+  document.getElementById("status").textContent = "";
 
-    } finally {
+  try {
+    trainingType = document.getElementById("trainingType").value;
+    currentCount = Number(document.getElementById("digits").value);
+    intervalMs = Number(document.getElementById("interval").value);
+    answerMode = document.getElementById("mode").value;
+    progressMode = document.getElementById("progressMode").value;
+    maxMistakes = Number(document.getElementById("maxMistakes").value);
 
-      startButton.disabled = false;
+    await preloadAudioForSession();
 
-      startButton.textContent =
-        "セッション開始";
-    }
-  });
+    results = {};
+    sessionActive = true;
+    document.getElementById("settings").style.display = "none";
+    document.getElementById("sessionResult").style.display = "none";
+    await startQuestion();
+  } catch (error) {
+    console.error(error);
+    document.getElementById("status").textContent =
+      "音声の読み込みに失敗しました。ファイル名と通信状態を確認して、もう一度開始してください。";
+  } finally {
+    startButton.disabled = false;
+    startButton.textContent = "セッション開始";
+  }
+});
 
+document.getElementById("checkButton").addEventListener("click", () => {
+  if (!sessionActive) return;
 
-/* -------------------------
-   回答判定
-------------------------- */
+  const answer = getUserAnswer();
+  if (answer === "") return;
 
-document
-  .getElementById("checkButton")
-  .addEventListener("click", () => {
+  const correct = getCorrectAnswer();
 
-    if (!sessionActive) {
-      return;
-    }
+  if (!results[currentCount]) {
+    results[currentCount] = { success:0, attempts:0, mistakes:0 };
+  }
 
-    const answer =
-      document
-        .getElementById("answer")
-        .value
-        .trim();
+  results[currentCount].attempts++;
+  const isCorrect = answer === correct;
 
-    if (answer === "") {
-      return;
-    }
+  if (isCorrect) {
+    results[currentCount].success++;
+    document.getElementById("result").innerHTML =
+      '<span class="correct">○ 正解</span><br>正答：' + correct;
+  } else {
+    results[currentCount].mistakes++;
+    document.getElementById("result").innerHTML =
+      '<span class="wrong">× 不正解</span>' +
+      "<br>あなたの回答：" + answer +
+      "<br>正答：" + correct;
+  }
 
-    let correctNumbers =
-      [...currentNumbers];
+  document.getElementById("answerArea").style.display = "none";
 
-    if (answerMode === "backward") {
-      correctNumbers.reverse();
-    }
-
-    const correct =
-      correctNumbers.join("");
-
-    if (!results[currentDigits]) {
-
-      results[currentDigits] = {
-        success: 0,
-        attempts: 0,
-        mistakes: 0
-      };
-    }
-
-    results[currentDigits].attempts++;
-
-    const isCorrect =
-      answer === correct;
-
+  if (progressMode === "auto") {
     if (isCorrect) {
-
-      results[currentDigits].success++;
-
-      document
-        .getElementById("result")
-        .innerHTML =
-          '<span class="correct">' +
-          "○ 正解</span>" +
-          "<br>正答：" +
-          correct;
-
-    } else {
-
-      results[currentDigits].mistakes++;
-
-      document
-        .getElementById("result")
-        .innerHTML =
-          '<span class="wrong">' +
-          "× 不正解</span>" +
-          "<br>あなたの回答：" +
-          answer +
-          "<br>正答：" +
-          correct;
-    }
-
-    document
-      .getElementById("answerArea")
-      .style.display = "none";
-
-
-    /*
-      自動桁上げ
-    */
-
-    if (progressMode === "auto") {
-
-      if (isCorrect) {
-
-        if (currentDigits >= 15) {
-
-          endSession();
-          return;
-        }
-
-        currentDigits++;
-
-        document
-          .getElementById("nextArea")
-          .style.display = "block";
-
-        return;
-      }
-
-      if (
-        results[currentDigits].mistakes >=
-        maxMistakes
-      ) {
-
+      if (currentCount >= 15) {
         endSession();
         return;
       }
+      currentCount++;
+      document.getElementById("nextArea").style.display = "block";
+      return;
     }
 
-    document
-      .getElementById("nextArea")
-      .style.display = "block";
-  });
+    if (results[currentCount].mistakes >= maxMistakes) {
+      endSession();
+      return;
+    }
+  }
 
+  document.getElementById("nextArea").style.display = "block";
+});
 
-/* -------------------------
-   次の問題
-------------------------- */
+document.getElementById("nextButton").addEventListener("click", async () => {
+  await startQuestion();
+});
 
-document
-  .getElementById("nextButton")
-  .addEventListener("click", async () => {
-
-    await startQuestion();
-  });
-
-
-/* -------------------------
-   手動終了
-------------------------- */
-
-document
-  .getElementById("endButton")
-  .addEventListener("click", () => {
-
-    endSession();
-  });
-
-
-/* -------------------------
-   セッション終了
-------------------------- */
+document.getElementById("endButton").addEventListener("click", endSession);
 
 function endSession() {
-
   sessionActive = false;
-
-  document
-    .getElementById("answerArea")
-    .style.display = "none";
-
-  document
-    .getElementById("nextArea")
-    .style.display = "none";
-
-  document
-    .getElementById("status")
-    .textContent =
-      "セッション終了";
-
+  document.getElementById("answerArea").style.display = "none";
+  document.getElementById("nextArea").style.display = "none";
+  document.getElementById("status").textContent = "セッション終了";
   showSessionResult();
 }
 
-
-/* -------------------------
-   結果表示
-------------------------- */
-
 function showSessionResult() {
+  const resultArea = document.getElementById("sessionResult");
+  let html = "<strong>【結果】</strong><br><br>";
 
-  const resultArea =
-    document.getElementById(
-      "sessionResult"
-    );
-
-  let html =
-    "<strong>【結果】</strong><br><br>";
-
-  const digitList =
-    Object
-      .keys(results)
-      .map(Number)
-      .sort((a, b) => a - b);
-
+  const countList = Object.keys(results).map(Number).sort((a, b) => a - b);
   let highestSuccess = null;
+  const unit = trainingType === "digitSpan" ? "桁" : "項目";
 
-  for (const digit of digitList) {
-
-    const data =
-      results[digit];
-
-    html +=
-      digit +
-      "桁：" +
-      data.success +
-      " / " +
-      data.attempts +
-      "<br>";
-
-    if (data.success > 0) {
-
-      if (
-        highestSuccess === null ||
-        digit > highestSuccess
-      ) {
-
-        highestSuccess = digit;
-      }
+  for (const count of countList) {
+    const data = results[count];
+    html += count + unit + "：" + data.success + " / " + data.attempts + "<br>";
+    if (data.success > 0 &&
+        (highestSuccess === null || count > highestSuccess)) {
+      highestSuccess = count;
     }
   }
 
   html += "<br>";
 
   if (highestSuccess !== null) {
-
-    html +=
-      "<strong>最高到達桁：" +
-      highestSuccess +
-      "桁</strong>";
-
+    html += "<strong>最高到達" + unit + "：" +
+      highestSuccess + unit + "</strong>";
   } else {
-
-    html +=
-      "<strong>最高到達桁：なし</strong>";
+    html += "<strong>最高到達" + unit + "：なし</strong>";
   }
 
-  html +=
-    '<br><br>' +
-    '<button onclick="resetSession()">' +
-    "設定画面へ戻る" +
-    "</button>";
-
+  html += '<br><br><button onclick="resetSession()">設定画面へ戻る</button>';
   resultArea.innerHTML = html;
   resultArea.style.display = "block";
 }
 
-
-/* -------------------------
-   設定画面へ戻る
-------------------------- */
-
 function resetSession() {
-
-  document
-    .getElementById("settings")
-    .style.display = "block";
-
-  document
-    .getElementById("status")
-    .textContent = "";
-
-  document
-    .getElementById("result")
-    .innerHTML = "";
-
-  document
-    .getElementById("sessionResult")
-    .style.display = "none";
+  document.getElementById("settings").style.display = "block";
+  document.getElementById("status").textContent = "";
+  document.getElementById("result").innerHTML = "";
+  document.getElementById("sessionResult").style.display = "none";
+  updateSettingsForTrainingType();
 }
 
+document.getElementById("answer").addEventListener("keydown", event => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    document.getElementById("checkButton").click();
+  }
+});
 
-/* -------------------------
-   Enterキーでも回答
-------------------------- */
-
-document
-  .getElementById("answer")
-  .addEventListener("keydown", event => {
-
-    if (event.key === "Enter") {
-
-      event.preventDefault();
-
-      document
-        .getElementById("checkButton")
-        .click();
-    }
-  });
-
+buildAnswerKeys();
+updateSettingsForTrainingType();
 </script>
 
 </body>
