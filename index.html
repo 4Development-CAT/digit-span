@@ -31,20 +31,14 @@
 
     #sequenceAnswerArea { display: none; }
     #sequenceAnswer {
-      min-height: 48px;
+      width: 100%;
+      min-height: 52px;
       padding: 10px;
       border: 1px solid #888;
       border-radius: 6px;
       font-size: 26px;
-      overflow-wrap: anywhere;
-    }
-    .answerToken {
-      width: auto;
-      min-width: 42px;
-      min-height: 42px;
-      margin: 3px;
-      padding: 5px 8px;
-      font-size: 24px;
+      letter-spacing: 2px;
+      background: white;
     }
     .keyTitle {
       margin-top: 18px;
@@ -140,7 +134,7 @@
 
   <div id="sequenceAnswerArea">
     <label>回答</label>
-    <div id="sequenceAnswer"></div>
+    <input id="sequenceAnswer" type="text" inputmode="none" autocomplete="off" readonly>
 
     <div class="keyTitle">数字</div>
     <div id="numberKeys" class="keyGrid"></div>
@@ -173,7 +167,7 @@ let progressMode = "fixed";
 let maxMistakes = 2;
 let results = {};
 let sessionActive = false;
-let sequenceAnswerItems = [];
+let sequenceAnswerText = "";
 
 const audioFiles = {};
 const preparedAudioKeys = new Set();
@@ -361,31 +355,73 @@ function getUserAnswer() {
   if (trainingType === "digitSpan") {
     return document.getElementById("answer").value.trim();
   }
-  return sequenceAnswerItems.join("");
+  return sequenceAnswerText;
 }
 
 function clearAnswer() {
   document.getElementById("answer").value = "";
-  sequenceAnswerItems = [];
-  updateSequenceAnswer();
+  sequenceAnswerText = "";
+  updateSequenceAnswer(0);
 }
 
-function updateSequenceAnswer() {
+function updateSequenceAnswer(caretPosition = null) {
   const area = document.getElementById("sequenceAnswer");
-  area.innerHTML = "";
+  area.value = sequenceAnswerText;
 
-  sequenceAnswerItems.forEach((value, index) => {
-    const token = document.createElement("button");
-    token.type = "button";
-    token.className = "answerToken";
-    token.textContent = value;
-    token.title = "タップして削除";
-    token.addEventListener("click", () => {
-      sequenceAnswerItems.splice(index, 1);
-      updateSequenceAnswer();
-    });
-    area.appendChild(token);
+  const position =
+    caretPosition === null ? sequenceAnswerText.length : caretPosition;
+
+  requestAnimationFrame(() => {
+    area.focus({ preventScroll: true });
+    area.setSelectionRange(position, position);
   });
+}
+
+function insertSequenceValue(value) {
+  const area = document.getElementById("sequenceAnswer");
+  const start =
+    typeof area.selectionStart === "number"
+      ? area.selectionStart
+      : sequenceAnswerText.length;
+  const end =
+    typeof area.selectionEnd === "number"
+      ? area.selectionEnd
+      : start;
+
+  sequenceAnswerText =
+    sequenceAnswerText.slice(0, start) +
+    value +
+    sequenceAnswerText.slice(end);
+
+  updateSequenceAnswer(start + value.length);
+}
+
+function deleteSequenceValue() {
+  const area = document.getElementById("sequenceAnswer");
+  const start =
+    typeof area.selectionStart === "number"
+      ? area.selectionStart
+      : sequenceAnswerText.length;
+  const end =
+    typeof area.selectionEnd === "number"
+      ? area.selectionEnd
+      : start;
+
+  if (start !== end) {
+    sequenceAnswerText =
+      sequenceAnswerText.slice(0, start) +
+      sequenceAnswerText.slice(end);
+    updateSequenceAnswer(start);
+    return;
+  }
+
+  if (start <= 0) return;
+
+  sequenceAnswerText =
+    sequenceAnswerText.slice(0, start - 1) +
+    sequenceAnswerText.slice(start);
+
+  updateSequenceAnswer(start - 1);
 }
 
 function buildAnswerKeys() {
@@ -400,8 +436,7 @@ function buildAnswerKeys() {
     button.className = "keyButton";
     button.textContent = digit;
     button.addEventListener("click", () => {
-      sequenceAnswerItems.push(String(digit));
-      updateSequenceAnswer();
+      insertSequenceValue(String(digit));
     });
     numberKeys.appendChild(button);
   }
@@ -412,8 +447,7 @@ function buildAnswerKeys() {
     button.className = "keyButton";
     button.textContent = kana.char;
     button.addEventListener("click", () => {
-      sequenceAnswerItems.push(kana.char);
-      updateSequenceAnswer();
+      insertSequenceValue(kana.char);
     });
     kanaKeys.appendChild(button);
   }
@@ -475,8 +509,7 @@ document.getElementById("trainingType").addEventListener(
 );
 
 document.getElementById("deleteSequenceButton").addEventListener("click", () => {
-  sequenceAnswerItems.pop();
-  updateSequenceAnswer();
+  deleteSequenceValue();
 });
 
 document.getElementById("startSessionButton").addEventListener("click", async () => {
