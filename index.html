@@ -48,17 +48,41 @@
     }
     .keyGrid {
       display: grid;
+      grid-template-columns: repeat(5, 1fr);
       gap: 6px;
     }
-    #numberKeys { grid-template-columns: repeat(5, 1fr); }
-    #kanaKeys { grid-template-columns: repeat(5, 1fr); }
     .keyButton {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 48px;
+      min-height: 48px;
       margin: 0;
-      min-height: 44px;
-      padding: 6px 2px;
-      font-size: 19px;
+      padding: 0;
+      border: 1px solid #aaa;
+      border-radius: 8px;
+      background: #f2f2f2;
+      color: #111;
+      font: inherit;
+      font-size: 20px;
+      line-height: 1;
     }
-    #deleteSequenceButton { margin-top: 12px; }
+    .keySpacer {
+      height: 48px;
+    }
+    .deleteKeyButton {
+      width: 48px;
+      min-width: 48px;
+      height: 48px;
+      min-height: 48px;
+      justify-self: end;
+      border: 2px solid #777;
+      border-radius: 50%;
+      background: #fff;
+      font-size: 28px;
+      font-weight: bold;
+      line-height: 1;
+    }
   </style>
 </head>
 <body>
@@ -141,8 +165,6 @@
 
     <div class="keyTitle">カナ</div>
     <div id="kanaKeys" class="keyGrid"></div>
-
-    <button id="deleteSequenceButton" type="button">1文字削除</button>
   </div>
 
   <button id="checkButton">回答する</button>
@@ -377,23 +399,9 @@ function updateSequenceAnswer(caretPosition = null) {
   });
 }
 
-function insertSequenceValue(value) {
-  const area = document.getElementById("sequenceAnswer");
-  const start =
-    typeof area.selectionStart === "number"
-      ? area.selectionStart
-      : sequenceAnswerText.length;
-  const end =
-    typeof area.selectionEnd === "number"
-      ? area.selectionEnd
-      : start;
-
-  sequenceAnswerText =
-    sequenceAnswerText.slice(0, start) +
-    value +
-    sequenceAnswerText.slice(end);
-
-  updateSequenceAnswer(start + value.length);
+function appendSequenceValue(value) {
+  sequenceAnswerText += value;
+  updateSequenceAnswer(sequenceAnswerText.length);
 }
 
 function deleteSequenceValue() {
@@ -424,6 +432,19 @@ function deleteSequenceValue() {
   updateSequenceAnswer(start - 1);
 }
 
+function createDeleteKey() {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "keyButton deleteKeyButton";
+  button.textContent = "×";
+  button.title = "1文字削除";
+  button.setAttribute("aria-label", "1文字削除");
+  button.addEventListener("click", () => {
+    deleteSequenceValue();
+  });
+  return button;
+}
+
 function buildAnswerKeys() {
   const numberKeys = document.getElementById("numberKeys");
   const kanaKeys = document.getElementById("kanaKeys");
@@ -436,18 +457,45 @@ function buildAnswerKeys() {
     button.className = "keyButton";
     button.textContent = digit;
     button.addEventListener("click", () => {
-      insertSequenceValue(String(digit));
+      appendSequenceValue(String(digit));
     });
     numberKeys.appendChild(button);
   }
+  numberKeys.appendChild(createDeleteKey());
 
-  for (const kana of kanaList) {
+  const kanaKeyLayout = [
+    "ア","イ","ウ","エ","オ",
+    "カ","キ","ク","ケ","コ",
+    "サ","シ","ス","セ","ソ",
+    "タ","チ","ツ","テ","ト",
+    "ナ","ニ","ヌ","ネ","ノ",
+    "ハ","ヒ","フ","ヘ","ホ",
+    "マ","ミ","ム","メ","モ",
+    "ヤ",null,"ユ",null,"ヨ",
+    "ラ","リ","ル","レ","ロ",
+    "ワ",null,null,null,"__DELETE__"
+  ];
+
+  for (const char of kanaKeyLayout) {
+    if (char === null) {
+      const spacer = document.createElement("div");
+      spacer.className = "keySpacer";
+      spacer.setAttribute("aria-hidden", "true");
+      kanaKeys.appendChild(spacer);
+      continue;
+    }
+
+    if (char === "__DELETE__") {
+      kanaKeys.appendChild(createDeleteKey());
+      continue;
+    }
+
     const button = document.createElement("button");
     button.type = "button";
     button.className = "keyButton";
-    button.textContent = kana.char;
+    button.textContent = char;
     button.addEventListener("click", () => {
-      insertSequenceValue(kana.char);
+      appendSequenceValue(char);
     });
     kanaKeys.appendChild(button);
   }
@@ -507,10 +555,6 @@ async function startQuestion() {
 document.getElementById("trainingType").addEventListener(
   "change", updateSettingsForTrainingType
 );
-
-document.getElementById("deleteSequenceButton").addEventListener("click", () => {
-  deleteSequenceValue();
-});
 
 document.getElementById("startSessionButton").addEventListener("click", async () => {
   const startButton = document.getElementById("startSessionButton");
