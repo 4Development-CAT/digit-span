@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>音声入力テスト</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+      max-width: 520px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+      color: #111;
+      background: #fff;
+    }
+
+    h1 {
+      font-size: 24px;
+      margin: 8px 0 18px;
+    }
+
+    .note {
+      font-size: 16px;
+      margin-bottom: 18px;
+    }
+
+    label {
+      display: block;
+      margin: 18px 0 6px;
+      font-weight: bold;
+      font-size: 18px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 110px;
+      box-sizing: border-box;
+      padding: 12px;
+      border: 1px solid #888;
+      border-radius: 8px;
+      font-size: 26px;
+      line-height: 1.5;
+      background: #fff;
+      color: #111;
+    }
+
+    .output {
+      min-height: 58px;
+      padding: 12px;
+      border: 1px solid #aaa;
+      border-radius: 8px;
+      font-size: 26px;
+      letter-spacing: 2px;
+      word-break: break-all;
+      background: #fafafa;
+    }
+
+    button {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      min-height: 52px;
+      margin-top: 14px;
+      padding: 10px;
+      border: 1px solid #888;
+      border-radius: 8px;
+      background: #f2f2f2;
+      color: #111;
+      font-size: 20px;
+    }
+
+    .small {
+      margin-top: 18px;
+      font-size: 15px;
+      color: #444;
+    }
+  </style>
+</head>
+<body>
+
+<h1>iPhone 音声入力テスト</h1>
+
+<p class="note">
+  下の入力欄をタップし、iPhoneキーボードのマイクから回答を話してください。
+  このページ自体は外部APIを使いません。
+</p>
+
+<label for="dictationInput">iPhoneが入力した文字（そのまま）</label>
+<textarea
+  id="dictationInput"
+  autocomplete="off"
+  autocorrect="off"
+  autocapitalize="off"
+  spellcheck="false"
+  placeholder="ここをタップ → キーボードのマイク → 数字やカナを話す"
+></textarea>
+
+<label>トレーニング用に整形した結果</label>
+<div id="normalizedOutput" class="output"></div>
+
+<button id="clearButton" type="button">クリア</button>
+
+<p class="small">
+  整形では、全角数字→半角数字、ひらがな→カタカナ、空白・改行・一般的な句読点の削除だけを行います。
+  漢字や数字の読み違いは勝手に推測して直しません。
+</p>
+
+<script>
+const input = document.getElementById("dictationInput");
+const output = document.getElementById("normalizedOutput");
+const clearButton = document.getElementById("clearButton");
+
+function hiraganaToKatakana(text) {
+  return text.replace(/[\u3041-\u3096]/g, ch =>
+    String.fromCharCode(ch.charCodeAt(0) + 0x60)
+  );
+}
+
+function normalizeDictation(text) {
+  let result = text;
+
+  // 全角数字 → 半角数字
+  result = result.replace(/[０-９]/g, ch =>
+    String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)
+  );
+
+  // ひらがな → カタカナ
+  result = hiraganaToKatakana(result);
+
+  // 空白・改行・一般的な句読点を除去
+  result = result.replace(/[\s、。,.，．・!！?？「」『』（）()［］\[\]【】]/g, "");
+
+  return result;
+}
+
+function updateOutput() {
+  output.textContent = normalizeDictation(input.value);
+}
+
+input.addEventListener("input", updateOutput);
+
+clearButton.addEventListener("click", () => {
+  input.value = "";
+  updateOutput();
+  input.focus();
+});
+
+updateOutput();
+</script>
+
+</body>
+</html>
