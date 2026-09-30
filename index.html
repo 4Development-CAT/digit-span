@@ -24,6 +24,20 @@
       font-size: 14px;
       color: #555;
     }
+    #digitNumberKeys { margin-top: 10px; }
+    #dictationToggleButton { margin-top: 12px; }
+    #dictationArea {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid #ccc;
+    }
+    #dictationInput {
+      width: 100%;
+      font-size: 24px;
+      box-sizing: border-box;
+      margin-top: 6px;
+    }
+    #applyDictationButton, #cancelDictationButton { margin-top: 8px; }
     #status { margin: 25px 0 10px; font-size: 20px; font-weight: bold; }
     #result { margin-top: 20px; font-size: 20px; line-height: 1.7; }
     #sessionResult {
@@ -158,10 +172,21 @@
 <div id="answerArea">
   <div id="digitAnswerArea">
     <label for="answer">回答</label>
-    <input id="answer" type="text" autocomplete="off" autocorrect="off"
-           autocapitalize="off" spellcheck="false"
-           placeholder="手入力 または iPhone音声入力">
-    <div id="dictationNote">iPhoneではキーボードのマイクから数字を話せます。</div>
+    <input id="answer" type="text" inputmode="none" autocomplete="off" readonly>
+
+    <div id="digitNumberKeys" class="keyGrid"></div>
+
+    <button id="dictationToggleButton" type="button">🎤 音声入力を使う</button>
+
+    <div id="dictationArea" style="display:none;">
+      <label for="dictationInput">音声入力</label>
+      <input id="dictationInput" type="text" autocomplete="off" autocorrect="off"
+             autocapitalize="off" spellcheck="false"
+             placeholder="ここをタップしてキーボードのマイクを使用">
+      <div id="dictationNote">数字・各桁の漢数字だけを回答へ変換します。</div>
+      <button id="applyDictationButton" type="button">音声入力を回答へ反映</button>
+      <button id="cancelDictationButton" type="button">閉じる</button>
+    </div>
   </div>
 
   <div id="sequenceAnswerArea">
@@ -198,6 +223,7 @@ let maxMistakes = 2;
 let results = {};
 let sessionActive = false;
 let sequenceAnswerText = "";
+let digitAnswerText = "";
 
 const audioFiles = {};
 const preparedAudioKeys = new Set();
@@ -403,16 +429,31 @@ function normalizeDigitAnswer(text) {
 }
 
 function getUserAnswer() {
-  if (trainingType === "digitSpan") {
-    return normalizeDigitAnswer(document.getElementById("answer").value);
-  }
+  if (trainingType === "digitSpan") return digitAnswerText;
   return sequenceAnswerText;
 }
 
 function clearAnswer() {
+  digitAnswerText = "";
   document.getElementById("answer").value = "";
+  document.getElementById("dictationInput").value = "";
+  document.getElementById("dictationArea").style.display = "none";
   sequenceAnswerText = "";
   updateSequenceAnswer(0);
+}
+
+function updateDigitAnswer() {
+  document.getElementById("answer").value = digitAnswerText;
+}
+
+function appendDigitAnswer(value) {
+  digitAnswerText += value;
+  updateDigitAnswer();
+}
+
+function deleteDigitAnswer() {
+  digitAnswerText = digitAnswerText.slice(0, -1);
+  updateDigitAnswer();
 }
 
 function updateSequenceAnswer(caretPosition = null) {
@@ -584,6 +625,47 @@ async function startQuestion() {
 document.getElementById("trainingType").addEventListener(
   "change", updateSettingsForTrainingType
 );
+
+
+function createDigitAnswerKeys() {
+  const container = document.getElementById("digitNumberKeys");
+  container.innerHTML = "";
+  ["1","2","3","4","5","6","7","8","9"].forEach(value => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "answerKey";
+    button.textContent = value;
+    button.addEventListener("click", () => appendDigitAnswer(value));
+    container.appendChild(button);
+  });
+  const del = document.createElement("button");
+  del.type = "button";
+  del.className = "answerKey deleteKey";
+  del.textContent = "×";
+  del.addEventListener("click", deleteDigitAnswer);
+  container.appendChild(del);
+}
+
+document.getElementById("dictationToggleButton").addEventListener("click", () => {
+  const area = document.getElementById("dictationArea");
+  area.style.display = "block";
+  const input = document.getElementById("dictationInput");
+  input.value = "";
+  input.focus();
+});
+
+document.getElementById("applyDictationButton").addEventListener("click", () => {
+  const raw = document.getElementById("dictationInput").value;
+  digitAnswerText = normalizeDigitAnswer(raw);
+  updateDigitAnswer();
+  document.getElementById("dictationArea").style.display = "none";
+});
+
+document.getElementById("cancelDictationButton").addEventListener("click", () => {
+  document.getElementById("dictationArea").style.display = "none";
+});
+
+createDigitAnswerKeys();
 
 document.getElementById("startSessionButton").addEventListener("click", async () => {
   const startButton = document.getElementById("startSessionButton");
