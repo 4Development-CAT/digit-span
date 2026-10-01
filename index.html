@@ -232,8 +232,10 @@ let speechRecognizing = false;
 let speechFinalText = "";
 let speechInterimText = "";
 
-const audioFiles = {};
+// 読み上げはWeb Audio APIで予約再生する。
+const audioBuffers = {};
 const preparedAudioKeys = new Set();
+let audioContext = null;
 
 const kanaList = [
   { char:"ア", file:"a.wav" },   { char:"イ", file:"i.wav" },
@@ -281,41 +283,107 @@ function shuffle(array) {
   return copy;
 }
 
-function loadAudio(key, fileName) {
-  if (preparedAudioKeys.has(key)) return Promise.resolve();
-
-  const audio = new Audio("audio/" + fileName);
-  audio.preload = "auto";
-  audioFiles[key] = audio;
-
-  return new Promise((resolve, reject) => {
-    const cleanup = () => {
-      audio.removeEventListener("canplaythrough", loaded);
-      audio.removeEventListener("error", failed);
-    };
-    const loaded = () => {
-      cleanup();
-      preparedAudioKeys.add(key);
-      resolve();
-    };
-    const failed = () => {
-      cleanup();
-      reject(new Error(fileName + " の読み込みに失敗しました"));
-    };
-
-    if (audio.readyState >= 4) {
-      preparedAudioKeys.add(key);
-      resolve();
-      return;
+function createAudioContextIfNeeded() {
+  if (!audioContext || audioContext.state === "closed") {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) {
+      throw new Error("このブラウザではWeb Audio APIが使えません。");
     }
+    audioContext = new Ctx();
+  }
+  return audioContext;
+}
 
-    audio.addEventListener("canplaythrough", loaded);
-    audio.addEventListener("error", failed);
-    audio.load();
-  });
+async function unlockAudioContext() {
+  const ctx = createAudioContextIfNeeded();
+
+  try {
+    await ctx.resume();
+  } catch (error) {
+    // iOS Safariでは、すでに起動済み・一時停止中などで例外になることがある。
+  }
+
+  // iOS Safari対策：ユーザー操作後にごく短い無音を流してAudioContextを有効化する。
+  try {
+    const buffer = ctx.createBuffer(
+      1,
+      Math.max(1, Math.floor(ctx.sampleRate * 0.03)),
+      ctx.sampleRate
+    );
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start(0);
+  } catch (error) {
+    // ロック解除用なので、失敗しても続行する。
+  }
+
+  return ctx;
+}
+
+async function decodeAudioFile(fileName) {
+  const ctx = createAudioContextIfNeeded();
+  const response = await fetch("audio/" + fileName, { cache: "force-cache" });
+  if (!response.ok) {
+    throw new Error(fileName + " の取得に失敗しました");
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+
+  // Safari互換のため、Promise形式が失敗した場合はcallback形式も試す。
+  try {
+    return await ctx.decodeAudioData(arrayBuffer.slice(0));
+  } catch (error) {
+    return await new Promise((resolve, reject) => {
+      ctx.decodeAudioData(arrayBuffer, resolve, reject);
+    });
+  }
+}
+
+function trimLeadingSilence(buffer, threshold = 0.004, keepMs = 25) {
+  const sampleRate = buffer.sampleRate;
+  const keepSamples = Math.floor(sampleRate * keepMs / 1000);
+  const channelCount = buffer.numberOfChannels;
+  const length = buffer.length;
+
+  let first = 0;
+  outer:
+  for (let i = 0; i < length; i++) {
+    for (let ch = 0; ch < channelCount; ch++) {
+      if (Math.abs(buffer.getChannelData(ch)[i]) >= threshold) {
+        first = Math.max(0, i - keepSamples);
+        break outer;
+      }
+    }
+  }
+
+  if (first === 0) return buffer;
+
+  const trimmed = audioContext.createBuffer(
+    channelCount,
+    length - first,
+    sampleRate
+  );
+
+  for (let ch = 0; ch < channelCount; ch++) {
+    trimmed.copyToChannel(buffer.getChannelData(ch).subarray(first), ch, 0);
+  }
+
+  return trimmed;
+}
+
+async function loadAudio(key, fileName) {
+  if (preparedAudioKeys.has(key)) return;
+
+  const rawBuffer = await decodeAudioFile(fileName);
+  audioBuffers[key] = trimLeadingSilence(rawBuffer);
+  preparedAudioKeys.add(key);
 }
 
 async function preloadAudioForSession() {
+  // セッション開始ボタン押下後にWeb Audioを明示的に有効化する。
+  await unlockAudioContext();
+
   const promises = [];
 
   if (trainingType === "digitSpan") {
@@ -381,15 +449,35 @@ function generateLetterNumber(length) {
 }
 
 async function playItems(items, interval) {
-  for (const item of items) {
-    const audio = audioFiles[item.audioKey];
-    if (!audio) throw new Error("音声が準備されていません: " + item.value);
+  const ctx = await unlockAudioContext();
 
-    audio.pause();
-    audio.currentTime = 0;
-    await audio.play();
-    await sleep(interval);
+  const intervalSec = interval / 1000;
+  const startTime = ctx.currentTime + 0.35;
+  let maxDuration = 0;
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const buffer = audioBuffers[item.audioKey];
+
+    if (!buffer) {
+      throw new Error("音声が準備されていません: " + item.value);
+    }
+
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start(startTime + i * intervalSec);
+
+    maxDuration = Math.max(maxDuration, buffer.duration);
   }
+
+  // 予約した音声の最後まで待ってから回答欄を表示する。
+  const totalMs =
+    (items.length - 1) * interval +
+    maxDuration * 1000 +
+    350;
+
+  await sleep(totalMs);
 }
 
 function getCorrectAnswer() {
@@ -804,7 +892,7 @@ document.getElementById("startSessionButton").addEventListener("click", async ()
   } catch (error) {
     console.error(error);
     document.getElementById("status").textContent =
-      "音声の読み込みに失敗しました。ファイル名と通信状態を確認して、もう一度開始してください。";
+      "音声の読み込みに失敗しました。ファイル名・通信状態・Web Audioの有効化を確認して、もう一度開始してください。";
   } finally {
     startButton.disabled = false;
     startButton.textContent = "セッション開始";
