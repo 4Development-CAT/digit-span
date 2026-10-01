@@ -630,7 +630,13 @@ document.getElementById("trainingType").addEventListener(
 function createDigitAnswerKeys() {
   const container = document.getElementById("digitNumberKeys");
   container.innerHTML = "";
-  ["1","2","3","4","5","6","7","8","9"].forEach(value => {
+
+  // 数唱は0も出題されるため、0を含める。
+  // 配置：
+  // 1 2 3 4 5
+  // 6 7 8 9 0
+  //             ×
+  ["1","2","3","4","5","6","7","8","9","0"].forEach(value => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "answerKey";
@@ -638,10 +644,18 @@ function createDigitAnswerKeys() {
     button.addEventListener("click", () => appendDigitAnswer(value));
     container.appendChild(button);
   });
+
+  for (let i = 0; i < 4; i++) {
+    const spacer = document.createElement("div");
+    spacer.setAttribute("aria-hidden", "true");
+    container.appendChild(spacer);
+  }
+
   const del = document.createElement("button");
   del.type = "button";
   del.className = "answerKey deleteKey";
   del.textContent = "×";
+  del.setAttribute("aria-label", "1文字削除");
   del.addEventListener("click", deleteDigitAnswer);
   container.appendChild(del);
 }
