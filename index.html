@@ -23,25 +23,27 @@
 }
     #answerArea, #nextArea, #sessionResult { display: none; margin-top: 25px; }
     #answer { width: 100%; font-size: 28px; letter-spacing: 3px; }
-    #dictationNote {
+    #digitNumberKeys { margin-top: 10px; }
+    #speechButton { margin-top: 12px; }
+    .speechStatus {
+      margin-top: 8px;
+      min-height: 24px;
+      font-size: 16px;
+      font-weight: bold;
+      color: #333;
+    }
+    .speechRawArea {
+      margin-top: 6px;
+      min-height: 24px;
+      font-size: 15px;
+      color: #555;
+      word-break: break-all;
+    }
+    #speechNote {
       margin-top: 6px;
       font-size: 14px;
       color: #555;
     }
-    #digitNumberKeys { margin-top: 10px; }
-    #dictationToggleButton { margin-top: 12px; }
-    #dictationArea {
-      margin-top: 12px;
-      padding-top: 10px;
-      border-top: 1px solid #ccc;
-    }
-    #dictationInput {
-      width: 100%;
-      font-size: 24px;
-      box-sizing: border-box;
-      margin-top: 6px;
-    }
-    #applyDictationButton, #cancelDictationButton { margin-top: 8px; }
     #status { margin: 25px 0 10px; font-size: 20px; font-weight: bold; }
     #result { margin-top: 20px; font-size: 20px; line-height: 1.7; }
     #sessionResult {
@@ -180,16 +182,13 @@
 
     <div id="digitNumberKeys" class="keyGrid"></div>
 
-    <button id="dictationToggleButton" type="button">🎤 音声入力を使う</button>
-
-    <div id="dictationArea" style="display:none;">
-      <label for="dictationInput">音声入力</label>
-      <input id="dictationInput" type="text" autocomplete="off" autocorrect="off"
-             autocapitalize="off" spellcheck="false"
-             placeholder="ここをタップしてキーボードのマイクを使用">
-      <div id="dictationNote">数字・各桁の漢数字だけを回答へ変換します。</div>
-      <button id="applyDictationButton" type="button">音声入力を回答へ反映</button>
-      <button id="cancelDictationButton" type="button">閉じる</button>
+    <button id="speechButton" type="button">🎤 音声で回答</button>
+    <div id="speechStatus" class="speechStatus"></div>
+    <div id="speechRawArea" class="speechRawArea">
+      認識：<span id="speechRawText"></span>
+    </div>
+    <div id="speechNote">
+      歩行中はBluetoothイヤホンマイクより、iPhone本体マイクの方が安定しやすいです。
     </div>
   </div>
 
@@ -228,6 +227,10 @@ let results = {};
 let sessionActive = false;
 let sequenceAnswerText = "";
 let digitAnswerText = "";
+let speechRecognition = null;
+let speechRecognizing = false;
+let speechFinalText = "";
+let speechInterimText = "";
 
 const audioFiles = {};
 const preparedAudioKeys = new Set();
@@ -438,10 +441,14 @@ function getUserAnswer() {
 }
 
 function clearAnswer() {
+  stopSpeechRecognitionIfNeeded();
+
   digitAnswerText = "";
+  speechFinalText = "";
+  speechInterimText = "";
   document.getElementById("answer").value = "";
-  document.getElementById("dictationInput").value = "";
-  document.getElementById("dictationArea").style.display = "none";
+  updateSpeechDisplay("");
+
   sequenceAnswerText = "";
   updateSequenceAnswer(0);
 }
@@ -664,26 +671,114 @@ function createDigitAnswerKeys() {
   container.appendChild(del);
 }
 
-document.getElementById("dictationToggleButton").addEventListener("click", () => {
-  const area = document.getElementById("dictationArea");
-  area.style.display = "block";
-  const input = document.getElementById("dictationInput");
-  input.value = "";
-  input.focus();
-});
+function updateSpeechDisplay(text = null) {
+  if (text !== null) {
+    document.getElementById("speechStatus").textContent = text;
+  }
+  document.getElementById("speechRawText").textContent = speechFinalText + speechInterimText;
+}
 
-document.getElementById("applyDictationButton").addEventListener("click", () => {
-  const raw = document.getElementById("dictationInput").value;
-  digitAnswerText = normalizeDigitAnswer(raw);
-  updateDigitAnswer();
-  document.getElementById("dictationArea").style.display = "none";
-});
+function stopSpeechRecognitionIfNeeded() {
+  if (speechRecognition && speechRecognizing) {
+    try {
+      speechRecognition.stop();
+    } catch (error) {
+      // すでに停止済みなら何もしない
+    }
+  }
+}
 
-document.getElementById("cancelDictationButton").addEventListener("click", () => {
-  document.getElementById("dictationArea").style.display = "none";
-});
+function setupSpeechRecognition() {
+  const SpeechRecognition =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
+  const speechButton = document.getElementById("speechButton");
+
+  if (!SpeechRecognition) {
+    speechButton.disabled = true;
+    speechButton.textContent = "🎤 音声入力は非対応";
+    document.getElementById("speechStatus").textContent =
+      "このブラウザでは1ボタン音声入力が使えません。";
+    return;
+  }
+
+  speechRecognition = new SpeechRecognition();
+  speechRecognition.lang = "ja-JP";
+  speechRecognition.continuous = false;
+  speechRecognition.interimResults = true;
+  speechRecognition.maxAlternatives = 1;
+
+  speechRecognition.onstart = () => {
+    speechRecognizing = true;
+    speechFinalText = "";
+    speechInterimText = "";
+    speechButton.textContent = "■ 認識を停止";
+    updateSpeechDisplay("認識中です。数字をはっきり発話してください。");
+  };
+
+  speechRecognition.onresult = event => {
+    speechInterimText = "";
+
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript || "";
+      if (event.results[i].isFinal) {
+        speechFinalText += transcript;
+      } else {
+        speechInterimText += transcript;
+      }
+    }
+
+    const raw = speechFinalText + speechInterimText;
+    const normalized = normalizeDigitAnswer(raw);
+    if (normalized !== "") {
+      digitAnswerText = normalized;
+      updateDigitAnswer();
+    }
+
+    updateSpeechDisplay("認識中です。");
+  };
+
+  speechRecognition.onerror = event => {
+    const errorName = event && event.error ? event.error : "unknown";
+    updateSpeechDisplay("音声認識エラー：" + errorName);
+  };
+
+  speechRecognition.onend = () => {
+    speechRecognizing = false;
+    speechButton.textContent = "🎤 音声で回答";
+
+    const raw = speechFinalText + speechInterimText;
+    const normalized = normalizeDigitAnswer(raw);
+
+    if (normalized !== "") {
+      digitAnswerText = normalized;
+      updateDigitAnswer();
+      updateSpeechDisplay("認識終了。回答欄へ反映しました。");
+    } else {
+      updateSpeechDisplay("認識終了。数字として使える文字がありませんでした。");
+    }
+  };
+
+  speechButton.addEventListener("click", () => {
+    if (!speechRecognition) return;
+
+    if (speechRecognizing) {
+      stopSpeechRecognitionIfNeeded();
+      return;
+    }
+
+    try {
+      speechFinalText = "";
+      speechInterimText = "";
+      updateSpeechDisplay("");
+      speechRecognition.start();
+    } catch (error) {
+      updateSpeechDisplay("開始できませんでした。少し待って再試行してください。");
+    }
+  });
+}
 
 createDigitAnswerKeys();
+setupSpeechRecognition();
 
 document.getElementById("startSessionButton").addEventListener("click", async () => {
   const startButton = document.getElementById("startSessionButton");
@@ -743,6 +838,7 @@ document.getElementById("checkButton").addEventListener("click", () => {
       "<br>正答：" + correct;
   }
 
+  stopSpeechRecognitionIfNeeded();
   document.getElementById("answerArea").style.display = "none";
 
   if (progressMode === "auto") {
@@ -811,6 +907,7 @@ function showSessionResult() {
 }
 
 function resetSession() {
+  stopSpeechRecognitionIfNeeded();
   document.getElementById("settings").style.display = "block";
   document.getElementById("status").textContent = "";
   document.getElementById("result").innerHTML = "";
