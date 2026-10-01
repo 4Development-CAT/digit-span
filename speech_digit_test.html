@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数唱 音声入力テスト</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+      margin: 16px;
+      line-height: 1.6;
+      font-size: 18px;
+      background: #fafafa;
+      color: #222;
+    }
+    h1 { font-size: 24px; margin-bottom: 8px; }
+    .card {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      padding: 14px;
+      margin: 12px 0;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    button {
+      font-size: 20px;
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 1px solid #999;
+      background: #fff;
+      margin: 6px 4px 6px 0;
+      min-height: 52px;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    button.primary {
+      width: 100%;
+      font-size: 24px;
+      font-weight: 700;
+      background: #f2f2f2;
+    }
+    button:disabled { opacity: 0.45; }
+    .label { font-weight: 700; margin-top: 8px; }
+    .value {
+      min-height: 36px;
+      font-size: 26px;
+      letter-spacing: 2px;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      padding: 8px;
+      background: #fff;
+      word-break: break-all;
+    }
+    .small { font-size: 14px; color: #555; }
+    .status { font-weight: 700; min-height: 28px; }
+    .ok { color: #116611; }
+    .ng { color: #aa3333; }
+    .warn { color: #9a6500; }
+    .keyGrid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .answerKey {
+      font-size: 24px;
+      font-weight: 700;
+      min-height: 52px;
+      border-radius: 10px;
+      border: 1px solid #aaa;
+      background: #fff;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    .deleteKey {
+      border-radius: 50%;
+      border: 2px solid #777;
+      font-size: 28px;
+      background: #f7f7f7;
+    }
+  </style>
+</head>
+<body>
+  <h1>数唱 音声入力テスト</h1>
+
+  <div class="card">
+    <div class="small">
+      iPhone Safariで「🎤 音声で回答」を1回押して、数字を発話してください。認識結果を数字列に正規化します。<br>
+      例：三七五五 → 3755、３７５５ → 3755。<br>
+      「午後」のような単語は、数字として推測変換しません。
+    </div>
+  </div>
+
+  <div class="card">
+    <button id="startButton" class="primary">🎤 音声で回答</button>
+    <button id="stopButton" disabled>停止</button>
+    <button id="clearButton">クリア</button>
+    <div id="supportStatus" class="small"></div>
+    <div id="status" class="status"></div>
+  </div>
+
+  <div class="card">
+    <div class="label">回答欄</div>
+    <div id="answer" class="value"></div>
+
+    <div class="label">手入力テンキー</div>
+    <div id="numberKeys" class="keyGrid"></div>
+    <div class="small">音声入力が不安定な場合は、ここで修正できます。</div>
+  </div>
+
+  <div class="card">
+    <div class="label">音声認識の生テキスト</div>
+    <div id="rawText" class="value"></div>
+
+    <div class="label">途中結果</div>
+    <div id="interimText" class="value"></div>
+
+    <div class="label">正規化後</div>
+    <div id="normalizedText" class="value"></div>
+
+    <div class="label">数字化されず除外された文字</div>
+    <div id="ignoredText" class="value"></div>
+  </div>
+
+<script>
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+let recognition = null;
+let recognizing = false;
+let finalText = "";
+let interimText = "";
+let answerText = "";
+
+const startButton = document.getElementById("startButton");
+const stopButton = document.getElementById("stopButton");
+const clearButton = document.getElementById("clearButton");
+const statusEl = document.getElementById("status");
+const supportStatus = document.getElementById("supportStatus");
+const answerEl = document.getElementById("answer");
+const rawTextEl = document.getElementById("rawText");
+const interimTextEl = document.getElementById("interimText");
+const normalizedTextEl = document.getElementById("normalizedText");
+const ignoredTextEl = document.getElementById("ignoredText");
+
+function normalizeDigitAnswer(text) {
+  let result = text;
+
+  // 全角数字 → 半角数字
+  result = result.replace(/[０-９]/g, ch =>
+    String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)
+  );
+
+  // 各桁の漢数字だけを数字化する。「五十五」のような数値表現の解釈はしない。
+  const kanjiDigits = {
+    "〇":"0", "零":"0", "一":"1", "二":"2", "三":"3", "四":"4",
+    "五":"5", "六":"6", "七":"7", "八":"8", "九":"9"
+  };
+  result = result.replace(/[〇零一二三四五六七八九]/g, ch => kanjiDigits[ch]);
+
+  return result.replace(/[^0-9]/g, "");
+}
+
+function getIgnoredText(text) {
+  let converted = text.replace(/[０-９]/g, ch =>
+    String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)
+  );
+
+  const kanjiDigits = {
+    "〇":"0", "零":"0", "一":"1", "二":"2", "三":"3", "四":"4",
+    "五":"5", "六":"6", "七":"7", "八":"8", "九":"9"
+  };
+  converted = converted.replace(/[〇零一二三四五六七八九]/g, ch => kanjiDigits[ch]);
+
+  return converted.replace(/[0-9\s.,，．、。・:：;；\-ー＿_]/g, "");
+}
+
+function render() {
+  const raw = finalText + interimText;
+  const normalized = normalizeDigitAnswer(raw);
+  answerText = normalized;
+
+  answerEl.textContent = answerText;
+  rawTextEl.textContent = finalText;
+  interimTextEl.textContent = interimText;
+  normalizedTextEl.textContent = normalized;
+  ignoredTextEl.textContent = getIgnoredText(raw);
+}
+
+function setStatus(text, cls="") {
+  statusEl.textContent = text;
+  statusEl.className = "status " + cls;
+}
+
+function createNumberKeys() {
+  const container = document.getElementById("numberKeys");
+  container.innerHTML = "";
+
+  ["1","2","3","4","5","6","7","8","9","0"].forEach(value => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "answerKey";
+    button.textContent = value;
+    button.addEventListener("click", () => {
+      answerText += value;
+      finalText = answerText;
+      interimText = "";
+      renderManual();
+    });
+    container.appendChild(button);
+  });
+
+  const del = document.createElement("button");
+  del.type = "button";
+  del.className = "answerKey deleteKey";
+  del.textContent = "×";
+  del.addEventListener("click", () => {
+    answerText = answerText.slice(0, -1);
+    finalText = answerText;
+    interimText = "";
+    renderManual();
+  });
+  container.appendChild(del);
+}
+
+function renderManual() {
+  answerEl.textContent = answerText;
+  rawTextEl.textContent = finalText;
+  interimTextEl.textContent = "";
+  normalizedTextEl.textContent = answerText;
+  ignoredTextEl.textContent = "";
+}
+
+function setupRecognition() {
+  if (!SpeechRecognition) {
+    supportStatus.innerHTML = '<span class="ng">このブラウザではWeb Speech APIが使えません。</span>';
+    startButton.disabled = true;
+    return;
+  }
+
+  supportStatus.innerHTML = '<span class="ok">Web Speech APIを検出しました。</span>';
+
+  recognition = new SpeechRecognition();
+  recognition.lang = "ja-JP";
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = () => {
+    recognizing = true;
+    finalText = "";
+    interimText = "";
+    setStatus("認識中です。数字をはっきり発話してください。", "ok");
+    startButton.disabled = true;
+    stopButton.disabled = false;
+    render();
+  };
+
+  recognition.onresult = (event) => {
+    interimText = "";
+
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript || "";
+      if (event.results[i].isFinal) finalText += transcript;
+      else interimText += transcript;
+    }
+
+    render();
+  };
+
+  recognition.onerror = (event) => {
+    const msg = event && event.error ? event.error : "unknown";
+    setStatus("音声認識エラー: " + msg, "ng");
+  };
+
+  recognition.onend = () => {
+    recognizing = false;
+    startButton.disabled = false;
+    stopButton.disabled = true;
+
+    const normalized = normalizeDigitAnswer(finalText + interimText);
+    answerText = normalized;
+    answerEl.textContent = answerText;
+    normalizedTextEl.textContent = normalized;
+
+    if (normalized.length > 0) setStatus("認識終了。回答欄へ反映しました。", "ok");
+    else setStatus("認識終了。数字として使える文字がありませんでした。", "warn");
+  };
+}
+
+startButton.addEventListener("click", () => {
+  if (!recognition || recognizing) return;
+  try {
+    recognition.start();
+  } catch (e) {
+    setStatus("開始できませんでした。数秒待ってから再試行してください。", "ng");
+  }
+});
+
+stopButton.addEventListener("click", () => {
+  if (recognition && recognizing) recognition.stop();
+});
+
+clearButton.addEventListener("click", () => {
+  finalText = "";
+  interimText = "";
+  answerText = "";
+  renderManual();
+  setStatus("");
+});
+
+createNumberKeys();
+setupRecognition();
+renderManual();
+</script>
+</body>
+</html>
