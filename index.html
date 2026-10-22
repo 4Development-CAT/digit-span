@@ -44,7 +44,25 @@
       font-size: 14px;
       color: #555;
     }
-    #status { margin: 25px 0 10px; font-size: 20px; font-weight: bold; }
+    #progressArea {
+      display: none;
+      margin: 18px 0 12px;
+      padding: 12px 14px;
+      border: 1px solid #bbb;
+      border-radius: 10px;
+      background: #f7f7f7;
+    }
+    .progressMain {
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+    .progressSub {
+      font-size: 16px;
+      color: #555;
+      margin-top: 2px;
+    }
+    #status { margin: 14px 0 10px; font-size: 20px; font-weight: bold; }
     #result { margin-top: 20px; font-size: 20px; line-height: 1.7; }
     #sessionResult {
       border-top: 1px solid #aaa;
@@ -156,6 +174,7 @@
     <select id="mode">
       <option value="forward">順唱</option>
       <option value="backward">逆唱</option>
+      <option value="ascending">昇順</option>
     </select>
   </div>
 
@@ -173,6 +192,11 @@
   <button id="startSessionButton">セッション開始</button>
 </div>
 
+<div id="progressArea" role="status" aria-live="polite" aria-atomic="true">
+  <div id="progressQuestion" class="progressMain"></div>
+  <div id="progressCorrect" class="progressSub"></div>
+</div>
+
 <div id="status"></div>
 
 <div id="answerArea">
@@ -188,7 +212,7 @@
       認識：<span id="speechRawText"></span>
     </div>
     <div id="speechNote">
-      歩行中はBluetoothイヤホンマイクより、iPhone本体マイクの方が安定しやすいです。
+      もう一度押すまで音声入力を継続します。チャンク間で止まった場合は自動再開します。歩行中はBluetoothイヤホンマイクより、iPhone本体マイクの方が安定しやすいです。
     </div>
   </div>
 
@@ -224,11 +248,14 @@ let answerMode = "forward";
 let progressMode = "fixed";
 let maxMistakes = 2;
 let results = {};
+let questionNumber = 0;
 let sessionActive = false;
 let sequenceAnswerText = "";
 let digitAnswerText = "";
 let speechRecognition = null;
 let speechRecognizing = false;
+let speechSessionActive = false;
+let speechRestartTimer = null;
 let speechFinalText = "";
 let speechInterimText = "";
 
@@ -484,6 +511,7 @@ function getCorrectAnswer() {
   if (trainingType === "digitSpan") {
     let values = currentItems.map(item => item.value);
     if (answerMode === "backward") values = [...values].reverse();
+    if (answerMode === "ascending") values = [...values].sort((a, b) => Number(a) - Number(b));
     return values.join("");
   }
 
@@ -521,6 +549,22 @@ function normalizeDigitAnswer(text) {
   result = result.replace(/[^0-9]/g, "");
 
   return result;
+}
+
+function getProgressTotals() {
+  return Object.values(results).reduce((total, data) => {
+    total.correct += data.success;
+    total.answered += data.attempts;
+    return total;
+  }, { correct: 0, answered: 0 });
+}
+
+function updateProgress() {
+  const totals = getProgressTotals();
+  document.getElementById("progressQuestion").textContent =
+    "第" + questionNumber + "問";
+  document.getElementById("progressCorrect").textContent =
+    "正解 " + totals.correct + "問 ／ 回答済み " + totals.answered + "問";
 }
 
 function getUserAnswer() {
@@ -679,6 +723,9 @@ function updateSettingsForTrainingType() {
 async function startQuestion() {
   if (!sessionActive) return;
 
+  questionNumber++;
+  updateProgress();
+
   document.getElementById("answerArea").style.display = "none";
   document.getElementById("nextArea").style.display = "none";
   document.getElementById("result").innerHTML = "";
@@ -763,10 +810,30 @@ function updateSpeechDisplay(text = null) {
   if (text !== null) {
     document.getElementById("speechStatus").textContent = text;
   }
-  document.getElementById("speechRawText").textContent = speechFinalText + speechInterimText;
+  document.getElementById("speechRawText").textContent =
+    speechFinalText + speechInterimText;
+}
+
+function applySpeechToAnswer() {
+  const raw = speechFinalText + speechInterimText;
+  const normalized = normalizeDigitAnswer(raw);
+
+  if (normalized !== "") {
+    digitAnswerText = normalized;
+    updateDigitAnswer();
+  }
+
+  return normalized;
 }
 
 function stopSpeechRecognitionIfNeeded() {
+  speechSessionActive = false;
+
+  if (speechRestartTimer) {
+    clearTimeout(speechRestartTimer);
+    speechRestartTimer = null;
+  }
+
   if (speechRecognition && speechRecognizing) {
     try {
       speechRecognition.stop();
@@ -791,16 +858,27 @@ function setupSpeechRecognition() {
 
   speechRecognition = new SpeechRecognition();
   speechRecognition.lang = "ja-JP";
-  speechRecognition.continuous = false;
+
+  // チャンク間の無音で終了しにくくする。iPhone Safari側で無視される場合もあるため、
+  // onend時の自動再開も併用する。
+  speechRecognition.continuous = true;
   speechRecognition.interimResults = true;
   speechRecognition.maxAlternatives = 1;
 
+  function startSpeechRecognitionInstance() {
+    if (!speechSessionActive || !speechRecognition || speechRecognizing) return;
+
+    try {
+      speechRecognition.start();
+    } catch (error) {
+      updateSpeechDisplay("開始できませんでした。少し待って再試行してください。");
+    }
+  }
+
   speechRecognition.onstart = () => {
     speechRecognizing = true;
-    speechFinalText = "";
-    speechInterimText = "";
-    speechButton.textContent = "■ 認識を停止";
-    updateSpeechDisplay("認識中です。数字をはっきり発話してください。");
+    speechButton.textContent = "■ 音声入力を終了";
+    updateSpeechDisplay("認識中です。チャンクごとに数字を発話してください。");
   };
 
   speechRecognition.onresult = event => {
@@ -815,31 +893,52 @@ function setupSpeechRecognition() {
       }
     }
 
-    const raw = speechFinalText + speechInterimText;
-    const normalized = normalizeDigitAnswer(raw);
-    if (normalized !== "") {
-      digitAnswerText = normalized;
-      updateDigitAnswer();
-    }
-
-    updateSpeechDisplay("認識中です。");
+    applySpeechToAnswer();
+    updateSpeechDisplay("認識中です。無音で止まっても自動再開します。");
   };
 
   speechRecognition.onerror = event => {
     const errorName = event && event.error ? event.error : "unknown";
+
+    if (
+      errorName === "not-allowed" ||
+      errorName === "service-not-allowed" ||
+      errorName === "audio-capture"
+    ) {
+      speechSessionActive = false;
+    }
+
     updateSpeechDisplay("音声認識エラー：" + errorName);
   };
 
   speechRecognition.onend = () => {
     speechRecognizing = false;
+
+    // 終了直前の途中結果も、チャンクとして一旦採用する。
+    // これにより、無音で認識が切れた時に直前のチャンクが落ちにくくなる。
+    if (speechInterimText !== "") {
+      speechFinalText += speechInterimText;
+      speechInterimText = "";
+      applySpeechToAnswer();
+    }
+
+    if (speechSessionActive) {
+      speechButton.textContent = "■ 音声入力を終了";
+      updateSpeechDisplay("無音で一時停止しました。音声入力を自動再開します。");
+
+      if (speechRestartTimer) clearTimeout(speechRestartTimer);
+      speechRestartTimer = setTimeout(() => {
+        speechRestartTimer = null;
+        startSpeechRecognitionInstance();
+      }, 150);
+      return;
+    }
+
     speechButton.textContent = "🎤 音声で回答";
 
-    const raw = speechFinalText + speechInterimText;
-    const normalized = normalizeDigitAnswer(raw);
+    const normalized = applySpeechToAnswer();
 
     if (normalized !== "") {
-      digitAnswerText = normalized;
-      updateDigitAnswer();
       updateSpeechDisplay("認識終了。回答欄へ反映しました。");
     } else {
       updateSpeechDisplay("認識終了。数字として使える文字がありませんでした。");
@@ -849,19 +948,16 @@ function setupSpeechRecognition() {
   speechButton.addEventListener("click", () => {
     if (!speechRecognition) return;
 
-    if (speechRecognizing) {
+    if (speechSessionActive || speechRecognizing) {
       stopSpeechRecognitionIfNeeded();
       return;
     }
 
-    try {
-      speechFinalText = "";
-      speechInterimText = "";
-      updateSpeechDisplay("");
-      speechRecognition.start();
-    } catch (error) {
-      updateSpeechDisplay("開始できませんでした。少し待って再試行してください。");
-    }
+    speechSessionActive = true;
+    speechFinalText = "";
+    speechInterimText = "";
+    updateSpeechDisplay("");
+    startSpeechRecognitionInstance();
   });
 }
 
@@ -885,7 +981,9 @@ document.getElementById("startSessionButton").addEventListener("click", async ()
     await preloadAudioForSession();
 
     results = {};
+    questionNumber = 0;
     sessionActive = true;
+    document.getElementById("progressArea").style.display = "block";
     document.getElementById("settings").style.display = "none";
     document.getElementById("sessionResult").style.display = "none";
     await startQuestion();
@@ -926,6 +1024,7 @@ document.getElementById("checkButton").addEventListener("click", () => {
       "<br>正答：" + correct;
   }
 
+  updateProgress();
   stopSpeechRecognitionIfNeeded();
   document.getElementById("answerArea").style.display = "none";
 
@@ -957,6 +1056,7 @@ document.getElementById("endButton").addEventListener("click", endSession);
 
 function endSession() {
   sessionActive = false;
+  document.getElementById("progressArea").style.display = "none";
   document.getElementById("answerArea").style.display = "none";
   document.getElementById("nextArea").style.display = "none";
   document.getElementById("status").textContent = "セッション終了";
@@ -965,7 +1065,9 @@ function endSession() {
 
 function showSessionResult() {
   const resultArea = document.getElementById("sessionResult");
-  let html = "<strong>【結果】</strong><br><br>";
+  const totals = getProgressTotals();
+  let html = "<strong>【結果】</strong><br>" +
+    "合計：" + totals.correct + "問正解 / " + totals.answered + "問回答<br><br>";
 
   const countList = Object.keys(results).map(Number).sort((a, b) => a - b);
   let highestSuccess = null;
@@ -996,6 +1098,7 @@ function showSessionResult() {
 
 function resetSession() {
   stopSpeechRecognitionIfNeeded();
+  document.getElementById("progressArea").style.display = "none";
   document.getElementById("settings").style.display = "block";
   document.getElementById("status").textContent = "";
   document.getElementById("result").innerHTML = "";
