@@ -126,6 +126,47 @@
       font-weight: bold;
       line-height: 1;
     }
+
+    /* 数唱専用：画像に近い3列×4段の大きなテンキー */
+    .digitKeypad {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+      padding: 12px;
+      border-radius: 18px;
+      background: #0c0c14;
+    }
+    .digitKeypad button {
+      box-sizing: border-box;
+      width: 100%;
+      min-width: 0;
+      height: clamp(64px, 19vw, 92px);
+      min-height: 64px;
+      margin: 0;
+      padding: 4px;
+      border: 1px solid #373742;
+      border-radius: 18px;
+      background: #191923;
+      color: #fff;
+      font-family: inherit;
+      font-size: clamp(32px, 10vw, 48px);
+      font-weight: 650;
+      line-height: 1;
+      touch-action: manipulation;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .digitKeypad button:active { background: #35364b; }
+    .digitKeypad .digitClearKey,
+    .digitKeypad .digitDeleteKey {
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: .01em;
+    }
+    .digitKeypad .digitClearKey { color: #ffcb68; background: #30271b; }
+    .digitKeypad .digitDeleteKey { color: #ff858a; background: #352024; }
   </style>
 </head>
 <body>
@@ -204,7 +245,7 @@
     <label for="answer">回答</label>
     <input id="answer" type="text" inputmode="none" autocomplete="off" readonly>
 
-    <div id="digitNumberKeys" class="keyGrid"></div>
+    <div id="digitNumberKeys" class="digitKeypad"></div>
 
     <button id="speechButton" type="button">🎤 音声で回答</button>
     <div id="speechStatus" class="speechStatus"></div>
@@ -777,33 +818,32 @@ function createDigitAnswerKeys() {
   const container = document.getElementById("digitNumberKeys");
   container.innerHTML = "";
 
-  // 数唱は0も出題されるため、0を含める。
-  // 配置：
-  // 1 2 3 4 5
-  // 6 7 8 9 0
-  //             ×
-  ["1","2","3","4","5","6","7","8","9","0"].forEach(value => {
+  // 画像の配置に合わせて3列×4段。最下段は全消去・0・1文字削除。
+  // 「もう一度」はテスト条件を変えてしまうため、全消去に置き換える。
+  const layout = ["1","2","3","4","5","6","7","8","9","clear","0","delete"];
+  layout.forEach(value => {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "answerKey";
-    button.textContent = value;
-    button.addEventListener("click", () => appendDigitAnswer(value));
+    if (value === "clear") {
+      button.className = "digitClearKey";
+      button.textContent = "全消去";
+      button.setAttribute("aria-label", "入力した数字をすべて消去");
+      button.addEventListener("click", () => {
+        digitAnswerText = "";
+        updateDigitAnswer();
+      });
+    } else if (value === "delete") {
+      button.className = "digitDeleteKey";
+      button.textContent = "⌫ 削除";
+      button.setAttribute("aria-label", "最後の1文字を削除");
+      button.addEventListener("click", deleteDigitAnswer);
+    } else {
+      button.className = "digitNumberKey";
+      button.textContent = value;
+      button.addEventListener("click", () => appendDigitAnswer(value));
+    }
     container.appendChild(button);
   });
-
-  for (let i = 0; i < 4; i++) {
-    const spacer = document.createElement("div");
-    spacer.setAttribute("aria-hidden", "true");
-    container.appendChild(spacer);
-  }
-
-  const del = document.createElement("button");
-  del.type = "button";
-  del.className = "answerKey deleteKey";
-  del.textContent = "×";
-  del.setAttribute("aria-label", "1文字削除");
-  del.addEventListener("click", deleteDigitAnswer);
-  container.appendChild(del);
 }
 
 function updateSpeechDisplay(text = null) {
