@@ -175,7 +175,8 @@
     /* 数唱の回答中だけ、見出し等を圧縮して1画面に収める。 */
     body.digitAnswerActive {
       margin: 0 auto;
-      padding: calc(env(safe-area-inset-top, 0px) + 8px) 12px
+      /* 横幅を読み上げ中と合わせ、進捗欄の幅が切り替わらないようにする。 */
+      padding: calc(env(safe-area-inset-top, 0px) + 8px) 20px
                calc(env(safe-area-inset-bottom, 0px) + 8px);
       height: 100vh;
       height: 100dvh;
@@ -186,13 +187,20 @@
       box-sizing: border-box;
     }
     body.digitAnswerActive > h1 { display: none; }
+    /* 進捗欄は読み上げ中と回答中で、文字・枠・余白を同じにする。 */
     body.digitAnswerActive #progressArea {
       flex: 0 0 auto;
-      margin: 0 0 4px;
-      padding: 4px 10px;
+      margin: 0 0 12px;
+      padding: 12px 14px;
     }
-    body.digitAnswerActive .progressMain { font-size: 18px; line-height: 1.2; }
-    body.digitAnswerActive .progressSub { font-size: 14px; margin: 0; }
+    body.digitAnswerActive .progressMain {
+      font-size: 22px;
+      line-height: 1.5;
+    }
+    body.digitAnswerActive .progressSub {
+      font-size: 16px;
+      margin-top: 2px;
+    }
     body.digitAnswerActive #status {
       flex: 0 0 auto;
       margin: 0 0 4px;
