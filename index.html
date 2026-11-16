@@ -294,6 +294,107 @@
       body.digitAnswerActive #checkButton { height: 44px; min-height: 44px; }
       body.digitAnswerActive .digitKeypad { height: min(43dvh, 320px); gap: 4px; padding: 4px; }
     }
+
+    /* Ver.4.16: 読み上げ中と回答中の上部位置を統一する。 */
+    body.sessionRunning {
+      margin: 0 auto;
+      padding: max(10px, env(safe-area-inset-top, 0px)) 18px
+               max(10px, env(safe-area-inset-bottom, 0px));
+      box-sizing: border-box;
+    }
+    body.sessionRunning > h1,
+    body.sessionRunning.digitAnswerActive > h1 {
+      display: block;
+      margin: 0 0 8px;
+      font-size: 24px;
+      line-height: 1.3;
+    }
+    body.sessionRunning #progressArea,
+    body.sessionRunning.digitAnswerActive #progressArea {
+      margin: 0 0 8px;
+      padding: 9px 12px;
+    }
+    body.sessionRunning #status,
+    body.sessionRunning.digitAnswerActive #status {
+      margin: 0 0 7px;
+      font-size: 20px;
+      line-height: 1.35;
+    }
+    body.sessionRunning.digitAnswerActive {
+      /* 画面最下部へのボタン押し下げをやめる。 */
+      display: block;
+      height: 100dvh;
+      max-height: 100dvh;
+      overflow: hidden;
+    }
+    body.sessionRunning.digitAnswerActive #answerArea {
+      display: flex;
+      flex-direction: column;
+      flex: 0 0 auto;
+      min-height: 0;
+      margin: 0;
+      gap: 0;
+    }
+    body.sessionRunning.digitAnswerActive #digitAnswerArea {
+      display: flex;
+      flex-direction: column;
+      flex: 0 0 auto;
+      min-height: 0;
+    }
+    body.sessionRunning.digitAnswerActive #digitAnswerArea > label {
+      margin: 0 0 4px;
+      font-size: 17px;
+      line-height: 1.25;
+    }
+    body.sessionRunning.digitAnswerActive #answer {
+      height: 42px;
+      min-height: 42px;
+      padding: 5px 10px;
+      font-size: 25px;
+    }
+    body.sessionRunning.digitAnswerActive .digitKeypad {
+      flex: 0 0 auto;
+      align-self: center;
+      width: 80%;
+      max-width: 360px;
+      height: clamp(194px, 32dvh, 248px);
+      min-height: 0;
+      max-height: none;
+      grid-template-rows: repeat(4, minmax(0, 1fr));
+      margin: 6px auto 0;
+      padding: 5px;
+      gap: 5px;
+    }
+    body.sessionRunning.digitAnswerActive #checkButton {
+      flex: 0 0 auto;
+      display: block;
+      height: 50px;
+      min-height: 50px;
+      margin: 8px 0 0;
+      padding: 6px;
+      font-size: 19px;
+    }
+    body.sessionRunning.digitAnswerActive .speechStatus {
+      min-height: 0;
+      margin-top: 4px;
+    }
+    body.sessionRunning.digitAnswerActive .speechRawArea {
+      min-height: 0;
+      margin-top: 2px;
+    }
+    @media (max-height: 650px) {
+      body.sessionRunning.digitAnswerActive .digitKeypad {
+        height: clamp(180px, 30dvh, 200px);
+      }
+      body.sessionRunning.digitAnswerActive #answer {
+        height: 38px;
+        min-height: 38px;
+      }
+      body.sessionRunning.digitAnswerActive #checkButton {
+        height: 46px;
+        min-height: 46px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -929,11 +1030,18 @@ async function startQuestion() {
     document.getElementById("sequenceAnswerArea").style.display = "block";
   }
 
+  const checkButton = document.getElementById("checkButton");
   if (trainingType === "digitSpan") {
+    // ボタンをテンキー直下へ。音声認識情報はその下に表示する。
+    document.getElementById("digitAnswerArea").insertBefore(
+      checkButton, document.getElementById("speechStatus")
+    );
     document.body.classList.add("digitAnswerActive");
     document.getElementById("digitAnswerArea").style.display = "flex";
     document.getElementById("answerArea").style.display = "flex";
   } else {
+    // 語音整列では従来どおり回答エリア末尾に置く。
+    document.getElementById("answerArea").appendChild(checkButton);
     document.body.classList.remove("digitAnswerActive");
     document.getElementById("answerArea").style.display = "block";
   }
@@ -1153,6 +1261,8 @@ document.getElementById("startSessionButton").addEventListener("click", async ()
     results = {};
     questionNumber = 0;
     sessionActive = true;
+    // 上部の見出し・進捗表示を読み上げ中も回答中も同じ配置にする。
+    document.body.classList.add("sessionRunning");
     document.getElementById("progressArea").style.display = "block";
     document.getElementById("settings").style.display = "none";
     document.getElementById("sessionResult").style.display = "none";
@@ -1226,7 +1336,7 @@ document.getElementById("nextButton").addEventListener("click", async () => {
 document.getElementById("endButton").addEventListener("click", endSession);
 
 function endSession() {
-  document.body.classList.remove("digitAnswerActive");
+  document.body.classList.remove("digitAnswerActive", "sessionRunning");
   sessionActive = false;
   document.getElementById("progressArea").style.display = "none";
   document.getElementById("answerArea").style.display = "none";
@@ -1269,7 +1379,7 @@ function showSessionResult() {
 }
 
 function resetSession() {
-  document.body.classList.remove("digitAnswerActive");
+  document.body.classList.remove("digitAnswerActive", "sessionRunning");
   stopSpeechRecognitionIfNeeded();
   document.getElementById("progressArea").style.display = "none";
   document.getElementById("settings").style.display = "block";
